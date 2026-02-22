@@ -1,6 +1,6 @@
 import IconButton from "@mui/material/IconButton";
 import { getErrorDetail, getErrorMessage } from "api/errors";
-import { aiBridgeModels, type AIBridgeModel } from "api/queries/aiBridge";
+import { type AIBridgeModel, aiBridgeModels } from "api/queries/aiBridge";
 import { experiments } from "api/queries/experiments";
 import type {
 	ProvisionerJobLog,

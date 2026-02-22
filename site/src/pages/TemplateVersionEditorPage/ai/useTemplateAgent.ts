@@ -6,8 +6,8 @@ import {
 	stepCountIs,
 	ToolLoopAgent,
 } from "ai";
-import type { AIBridgeProvider } from "api/queries/aiBridge";
 import { API } from "api/api";
+import type { AIBridgeProvider } from "api/queries/aiBridge";
 import { useCallback, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
 import {
