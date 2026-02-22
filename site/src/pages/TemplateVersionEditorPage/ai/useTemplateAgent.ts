@@ -1,20 +1,19 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import {
-	type AssistantContent,
-	type ModelMessage,
+	createAgentUIStream,
+	getToolName,
+	isToolUIPart,
+	readUIMessageStream,
 	stepCountIs,
 	ToolLoopAgent,
+	type UIMessage,
 } from "ai";
 import { API } from "api/api";
 import type { AIBridgeProvider } from "api/queries/aiBridge";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
-import {
-	createTemplateAgentTools,
-	executeDeleteFile,
-	executeEditFile,
-} from "./tools";
+import { createTemplateAgentTools } from "./tools";
 import type { AgentStatus, PendingToolCall } from "./types";
 
 /**
@@ -81,11 +80,16 @@ const createTemplateAgent = (
 	modelProvider: AIBridgeProvider,
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
+	onFileEdited?: (path: string) => void,
+	onFileDeleted?: (path: string) => void,
 ) => {
 	return new ToolLoopAgent({
 		model: resolveProviderModel(modelProvider, modelId),
 		instructions: SYSTEM_PROMPT,
-		tools: createTemplateAgentTools(getFileTree, setFileTree),
+		tools: createTemplateAgentTools(getFileTree, setFileTree, {
+			onFileEdited,
+			onFileDeleted,
+		}),
 		stopWhen: stepCountIs(MAX_STEPS),
 	});
 };
@@ -116,62 +120,177 @@ export interface DisplayMessage {
 	toolCalls: DisplayToolCall[];
 }
 
-type StreamToolCall = {
-	toolCallId: string;
-	toolName: string;
-	input?: unknown;
-	args?: unknown;
-};
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null;
 
-const getToolCallArgs = (toolCall: StreamToolCall): Record<string, unknown> => {
-	const args = toolCall.input ?? toolCall.args;
-	if (!isRecord(args)) {
-		throw new Error("Tool call arguments must be an object.");
+const toToolArgs = (input: unknown): Record<string, unknown> =>
+	isRecord(input) ? input : {};
+
+const cloneMessage = <T>(value: T): T => {
+	if (typeof globalThis.structuredClone === "function") {
+		return globalThis.structuredClone(value);
 	}
-	return args;
+	return JSON.parse(JSON.stringify(value)) as T;
 };
 
-const asToolOutput = (value: unknown) => ({
-	type: "json" as const,
-	value: (value ?? null) as never,
-});
+const upsertMessage = (
+	messages: UIMessage[],
+	message: UIMessage,
+): UIMessage[] => {
+	const index = messages.findIndex((existing) => existing.id === message.id);
+	if (index === -1) {
+		return [...messages, message];
+	}
+	const next = [...messages];
+	next[index] = message;
+	return next;
+};
 
-/**
- * Collect ALL tool calls from the last step that lack a result and
- * require user approval. The model can emit parallel tool calls
- * (e.g. two editFile calls), so we must handle every one rather
- * than just the first.
- */
-const getPendingToolCalls = (
-	steps: ReadonlyArray<{
-		toolCalls: ReadonlyArray<StreamToolCall>;
-		toolResults: ReadonlyArray<{ toolCallId: string }>;
-	}>,
+const mapToolStateToDisplay = (
+	part: Parameters<typeof getToolName>[0],
+): DisplayToolCall => {
+	const toolName = getToolName(part);
+	const args = toToolArgs(part.input);
+
+	switch (part.state) {
+		case "output-available":
+			return {
+				toolCallId: part.toolCallId,
+				toolName,
+				args,
+				result: part.output,
+				state: "result",
+			};
+		case "output-error":
+			return {
+				toolCallId: part.toolCallId,
+				toolName,
+				args,
+				result: { error: part.errorText },
+				state: "result",
+			};
+		case "output-denied":
+			return {
+				toolCallId: part.toolCallId,
+				toolName,
+				args,
+				result: {
+					error: part.approval.reason ?? "User rejected this action.",
+				},
+				state: "result",
+			};
+		default:
+			return {
+				toolCallId: part.toolCallId,
+				toolName,
+				args,
+				state: "pending",
+			};
+	}
+};
+
+const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
+	return uiMessages
+		.filter(
+			(message): message is UIMessage & { role: "user" | "assistant" } =>
+				message.role === "user" || message.role === "assistant",
+		)
+		.map((message) => {
+			const content = message.parts
+				.filter(
+					(part): part is { type: "text"; text: string } =>
+						part.type === "text",
+				)
+				.map((part) => part.text)
+				.join("");
+
+			const toolCalls = message.parts
+				.filter(isToolUIPart)
+				.map(mapToolStateToDisplay);
+
+			return {
+				id: message.id,
+				role: message.role,
+				content,
+				toolCalls,
+			};
+		});
+};
+
+const collectPendingApprovals = (
+	uiMessages: UIMessage[],
 ): PendingToolCall[] => {
-	const lastStep = steps[steps.length - 1];
-	if (!lastStep) {
+	const lastAssistantMessage = [...uiMessages]
+		.reverse()
+		.find((message) => message.role === "assistant");
+	if (!lastAssistantMessage) {
 		return [];
 	}
 
-	const resultCallIds = new Set(
-		lastStep.toolResults.map((result) => result.toolCallId),
-	);
+	const pending: PendingToolCall[] = [];
+	for (const part of lastAssistantMessage.parts) {
+		if (!isToolUIPart(part) || part.state !== "approval-requested") {
+			continue;
+		}
 
-	return lastStep.toolCalls
-		.filter(
-			(toolCall) =>
-				!resultCallIds.has(toolCall.toolCallId) &&
-				(toolCall.toolName === "editFile" ||
-					toolCall.toolName === "deleteFile"),
-		)
-		.map((toolCall) => ({
-			toolCallId: toolCall.toolCallId,
-			toolName: toolCall.toolName as "editFile" | "deleteFile",
-			args: getToolCallArgs(toolCall),
-		}));
+		const toolName = getToolName(part);
+		if (toolName !== "editFile" && toolName !== "deleteFile") {
+			continue;
+		}
+
+		pending.push({
+			approvalId: part.approval.id,
+			toolCallId: part.toolCallId,
+			toolName,
+			args: toToolArgs(part.input),
+		});
+	}
+
+	return pending;
+};
+
+const applyApprovalResponse = (
+	messages: UIMessage[],
+	pending: PendingToolCall,
+	approved: boolean,
+	reason?: string,
+): { nextMessages: UIMessage[]; updated: boolean } => {
+	let updated = false;
+
+	const nextMessages = messages.map((message, index) => {
+		if (index !== messages.length - 1 || message.role !== "assistant") {
+			return message;
+		}
+
+		const nextParts = message.parts.map((part) => {
+			if (!isToolUIPart(part)) {
+				return part;
+			}
+			if (
+				part.toolCallId !== pending.toolCallId ||
+				part.state !== "approval-requested"
+			) {
+				return part;
+			}
+			if (
+				getToolName(part) !== pending.toolName ||
+				part.approval.id !== pending.approvalId
+			) {
+				return part;
+			}
+
+			updated = true;
+			return {
+				...part,
+				state: "approval-responded",
+				approval: { id: pending.approvalId, approved, reason },
+			} as unknown as typeof part;
+		});
+
+		return updated ? { ...message, parts: nextParts } : message;
+	});
+
+	return { nextMessages, updated };
 };
 
 export const useTemplateAgent = ({
@@ -182,49 +301,20 @@ export const useTemplateAgent = ({
 	onFileEdited,
 	onFileDeleted,
 }: UseTemplateAgentOptions) => {
-	const [messages, setMessages] = useState<DisplayMessage[]>([]);
+	const [uiMessages, setUIMessages] = useState<UIMessage[]>([]);
 	const [status, setStatus] = useState<AgentStatus>("idle");
-	// Queue of tool calls awaiting user approval. The UI shows
-	// the first item; approve/reject pops items off until the
-	// queue is drained, then the stream resumes.
-	const [pendingApprovals, setPendingApprovals] = useState<PendingToolCall[]>(
-		[],
-	);
 
+	const uiMessagesRef = useRef<UIMessage[]>([]);
 	const messageCounter = useRef(0);
-	const messagesRef = useRef<ModelMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
 
-	const updateAssistantMessage = useCallback(
-		(id: string, content: string, toolCalls: DisplayToolCall[]) => {
-			setMessages((prev) => {
-				const index = prev.findIndex((message) => message.id === id);
-				if (index === -1) {
-					return [
-						...prev,
-						{
-							id,
-							role: "assistant",
-							content,
-							toolCalls: [...toolCalls],
-						},
-					];
-				}
-
-				const next = [...prev];
-				next[index] = {
-					...next[index],
-					content,
-					toolCalls: [...toolCalls],
-				};
-				return next;
-			});
-		},
-		[],
-	);
+	const setConversationMessages = useCallback((next: UIMessage[]) => {
+		uiMessagesRef.current = next;
+		setUIMessages(next);
+	}, []);
 
 	const runStream = useCallback(
-		async (coreMessages: ModelMessage[]) => {
+		async (conversation: UIMessage[]) => {
 			abortRef.current?.abort();
 			const abortController = new AbortController();
 			abortRef.current = abortController;
@@ -243,11 +333,15 @@ export const useTemplateAgent = ({
 				modelProvider,
 				getFileTree,
 				setFileTree,
+				onFileEdited,
+				onFileDeleted,
 			);
-			let result: Awaited<ReturnType<typeof agent.stream>>;
+
+			let stream: Awaited<ReturnType<typeof createAgentUIStream>>;
 			try {
-				result = await agent.stream({
-					messages: coreMessages,
+				stream = await createAgentUIStream({
+					agent,
+					uiMessages: conversation,
 					abortSignal: abortController.signal,
 				});
 			} catch {
@@ -259,75 +353,30 @@ export const useTemplateAgent = ({
 				return;
 			}
 
-			let currentAssistantId: string | null = null;
-			let currentText = "";
-			let currentToolCalls: DisplayToolCall[] = [];
-
-			const ensureAssistantId = () => {
-				if (currentAssistantId) {
-					return currentAssistantId;
-				}
-				currentAssistantId = `msg-${++messageCounter.current}`;
-				return currentAssistantId;
-			};
-
-			const refreshAssistantMessage = () => {
-				const id = ensureAssistantId();
-				updateAssistantMessage(id, currentText, currentToolCalls);
-			};
+			let nextConversation = conversation;
+			const lastMessage = conversation[conversation.length - 1];
+			const initialAssistantMessage =
+				lastMessage?.role === "assistant"
+					? cloneMessage(lastMessage)
+					: undefined;
 
 			try {
-				for await (const part of result.fullStream) {
+				for await (const message of readUIMessageStream({
+					stream,
+					message: initialAssistantMessage,
+				})) {
 					if (abortController.signal.aborted) {
 						break;
 					}
 
-					switch (part.type) {
-						case "text-delta": {
-							currentText += part.text;
-							refreshAssistantMessage();
-							break;
-						}
-						case "tool-call": {
-							const streamToolCall: StreamToolCall = {
-								toolCallId: part.toolCallId,
-								toolName: part.toolName,
-								input: part.input,
-							};
-							currentToolCalls = [
-								...currentToolCalls,
-								{
-									toolCallId: streamToolCall.toolCallId,
-									toolName: streamToolCall.toolName,
-									args: getToolCallArgs(streamToolCall),
-									state: "pending",
-								},
-							];
-							refreshAssistantMessage();
-							break;
-						}
-						case "tool-result": {
-							const matchingToolCall = currentToolCalls.find(
-								(toolCall) => toolCall.toolCallId === part.toolCallId,
-							);
-							if (matchingToolCall) {
-								matchingToolCall.state = "result";
-								matchingToolCall.result = part.output;
-							}
-							refreshAssistantMessage();
-							break;
-						}
-						case "finish-step": {
-							currentAssistantId = null;
-							currentText = "";
-							currentToolCalls = [];
-							break;
-						}
-					}
+					nextConversation = upsertMessage(uiMessagesRef.current, message);
+					setConversationMessages(nextConversation);
 				}
 			} catch {
 				if (!abortController.signal.aborted) {
 					finishRun("error");
+				} else {
+					finishRun("idle");
 				}
 				return;
 			}
@@ -337,55 +386,18 @@ export const useTemplateAgent = ({
 				return;
 			}
 
-			const steps = await result.steps;
-
-			const nextMessages = [...coreMessages];
-
-			for (const step of steps) {
-				const assistantParts: Exclude<AssistantContent, string> = [];
-				if (step.text) {
-					assistantParts.push({ type: "text", text: step.text });
-				}
-
-				for (const toolCall of step.toolCalls) {
-					assistantParts.push({
-						type: "tool-call",
-						toolCallId: toolCall.toolCallId,
-						toolName: toolCall.toolName,
-						input: getToolCallArgs(toolCall),
-					});
-				}
-
-				if (assistantParts.length > 0) {
-					nextMessages.push({ role: "assistant", content: assistantParts });
-				}
-
-				if (step.toolResults.length > 0) {
-					nextMessages.push({
-						role: "tool",
-						content: step.toolResults.map((toolResult) => ({
-							type: "tool-result" as const,
-							toolCallId: toolResult.toolCallId,
-							toolName: toolResult.toolName,
-							output: asToolOutput(toolResult.output),
-						})),
-					});
-				}
-			}
-
-			messagesRef.current = nextMessages;
-
-			const nextPending = getPendingToolCalls(steps);
-			if (nextPending.length > 0) {
-				setPendingApprovals(nextPending);
-				finishRun("awaiting_approval");
-				return;
-			}
-
-			setPendingApprovals([]);
-			finishRun("idle");
+			const pending = collectPendingApprovals(nextConversation);
+			finishRun(pending.length > 0 ? "awaiting_approval" : "idle");
 		},
-		[getFileTree, modelId, modelProvider, setFileTree, updateAssistantMessage],
+		[
+			getFileTree,
+			modelId,
+			modelProvider,
+			onFileDeleted,
+			onFileEdited,
+			setConversationMessages,
+			setFileTree,
+		],
 	);
 
 	const send = useCallback(
@@ -402,166 +414,101 @@ export const useTemplateAgent = ({
 				return;
 			}
 
-			const userMessage: ModelMessage = { role: "user", content: trimmed };
-			const nextMessages = [...messagesRef.current, userMessage];
-			messagesRef.current = nextMessages;
+			const userMessage: UIMessage = {
+				id: `msg-${++messageCounter.current}`,
+				role: "user",
+				parts: [{ type: "text", text: trimmed }],
+			};
+			const nextConversation = [...uiMessagesRef.current, userMessage];
+			setConversationMessages(nextConversation);
 
-			setMessages((prev) => [
-				...prev,
-				{
-					id: `msg-${++messageCounter.current}`,
-					role: "user",
-					content: trimmed,
-					toolCalls: [],
-				},
-			]);
-
-			void runStream(nextMessages);
+			void runStream(nextConversation);
 		},
-		[runStream, status],
+		[runStream, setConversationMessages, status],
 	);
 
-	/**
-	 * Execute a pending tool call and append its result to the
-	 * conversation. Returns the updated core messages array.
-	 */
-	const executePendingTool = useCallback(
-		(pending: PendingToolCall, resultValue: unknown): ModelMessage[] => {
-			setMessages((prev) =>
-				prev.map((message) => ({
-					...message,
-					toolCalls: message.toolCalls.map((toolCall) =>
-						toolCall.toolCallId === pending.toolCallId
-							? { ...toolCall, result: resultValue, state: "result" as const }
-							: toolCall,
-					),
-				})),
-			);
-
-			const toolMessage: ModelMessage = {
-				role: "tool",
-				content: [
-					{
-						type: "tool-result",
-						toolCallId: pending.toolCallId,
-						toolName: pending.toolName,
-						output: asToolOutput(resultValue),
-					},
-				],
-			};
-			const next = [...messagesRef.current, toolMessage];
-			messagesRef.current = next;
-			return next;
-		},
-		[],
+	const pendingApprovals = useMemo(
+		() => collectPendingApprovals(uiMessages),
+		[uiMessages],
 	);
 
 	const approve = useCallback(() => {
+		if (status !== "awaiting_approval") {
+			return;
+		}
+
 		const current = pendingApprovals[0];
 		if (!current) {
 			return;
 		}
 
-		let toolResult: unknown;
-		if (current.toolName === "editFile") {
-			const path = current.args.path;
-			const oldContent = current.args.oldContent;
-			const newContent = current.args.newContent;
-			if (
-				typeof path !== "string" ||
-				path.length === 0 ||
-				typeof oldContent !== "string" ||
-				typeof newContent !== "string"
-			) {
-				toolResult = {
-					success: false,
-					error:
-						"editFile arguments are invalid. path must be a non-empty string, and oldContent/newContent must be strings.",
-					path: typeof path === "string" ? path : "",
-				};
-			} else {
-				toolResult = executeEditFile(getFileTree, setFileTree, {
-					path,
-					oldContent,
-					newContent,
-				});
-				if (isRecord(toolResult) && toolResult.success === true) {
-					onFileEdited?.(path);
-				}
-			}
-		} else {
-			const path = current.args.path;
-			if (typeof path !== "string" || path.length === 0) {
-				toolResult = {
-					success: false,
-					error:
-						"deleteFile arguments are invalid. path must be a non-empty string.",
-					path: typeof path === "string" ? path : "",
-				};
-			} else {
-				toolResult = executeDeleteFile(getFileTree, setFileTree, { path });
-				if (isRecord(toolResult) && toolResult.success === true) {
-					onFileDeleted?.(path);
-				}
-			}
+		const { nextMessages, updated } = applyApprovalResponse(
+			uiMessagesRef.current,
+			current,
+			true,
+		);
+		if (!updated) {
+			setStatus("error");
+			return;
 		}
 
-		const nextMessages = executePendingTool(current, toolResult);
-		const remaining = pendingApprovals.slice(1);
-
+		setConversationMessages(nextMessages);
+		const remaining = collectPendingApprovals(nextMessages);
 		if (remaining.length > 0) {
-			// More tool calls waiting for approval — stay in
-			// awaiting_approval state and show the next one.
-			setPendingApprovals(remaining);
-		} else {
-			setPendingApprovals([]);
-			void runStream(nextMessages);
+			setStatus("awaiting_approval");
+			return;
 		}
-	}, [
-		executePendingTool,
-		getFileTree,
-		onFileDeleted,
-		onFileEdited,
-		pendingApprovals,
-		runStream,
-		setFileTree,
-	]);
+
+		void runStream(nextMessages);
+	}, [pendingApprovals, runStream, setConversationMessages, status]);
 
 	const reject = useCallback(() => {
+		if (status !== "awaiting_approval") {
+			return;
+		}
+
 		const current = pendingApprovals[0];
 		if (!current) {
 			return;
 		}
 
-		const rejectionResult = { error: "User rejected this action." };
-		const nextMessages = executePendingTool(current, rejectionResult);
-		const remaining = pendingApprovals.slice(1);
-
-		if (remaining.length > 0) {
-			setPendingApprovals(remaining);
-		} else {
-			setPendingApprovals([]);
-			void runStream(nextMessages);
+		const { nextMessages, updated } = applyApprovalResponse(
+			uiMessagesRef.current,
+			current,
+			false,
+			"User rejected this action.",
+		);
+		if (!updated) {
+			setStatus("error");
+			return;
 		}
-	}, [executePendingTool, pendingApprovals, runStream]);
+
+		setConversationMessages(nextMessages);
+		const remaining = collectPendingApprovals(nextMessages);
+		if (remaining.length > 0) {
+			setStatus("awaiting_approval");
+			return;
+		}
+
+		void runStream(nextMessages);
+	}, [pendingApprovals, runStream, setConversationMessages, status]);
 
 	const stop = useCallback(() => {
 		abortRef.current?.abort();
 		abortRef.current = null;
-		setStatus("idle");
+		const pending = collectPendingApprovals(uiMessagesRef.current);
+		setStatus(pending.length > 0 ? "awaiting_approval" : "idle");
 	}, []);
 
 	const reset = useCallback(() => {
 		abortRef.current?.abort();
 		abortRef.current = null;
-		messagesRef.current = [];
-		setMessages([]);
-		setPendingApprovals([]);
+		messageCounter.current = 0;
+		setConversationMessages([]);
 		setStatus("idle");
-	}, []);
+	}, [setConversationMessages]);
 
-	// Expose the first pending item (or null) so the UI can show
-	// one approval card at a time.
+	const messages = useMemo(() => toDisplayMessages(uiMessages), [uiMessages]);
 	const pendingApproval =
 		pendingApprovals.length > 0 ? pendingApprovals[0] : null;
 

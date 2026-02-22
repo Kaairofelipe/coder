@@ -2,6 +2,8 @@
 
 /** Tool call awaiting user approval (editFile or deleteFile). */
 export interface PendingToolCall {
+	/** Approval request ID from the AI SDK. */
+	approvalId: string;
 	/** The tool call ID from the AI SDK. */
 	toolCallId: string;
 	/** Name of the tool being called. */

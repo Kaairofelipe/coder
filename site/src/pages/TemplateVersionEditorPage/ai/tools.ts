@@ -11,6 +11,11 @@ import {
 } from "utils/filetree";
 import { z } from "zod";
 
+interface TemplateAgentToolCallbacks {
+	onFileEdited?: (path: string) => void;
+	onFileDeleted?: (path: string) => void;
+}
+
 /**
  * Creates the set of AI tools that operate on the template editor's
  * in-memory FileTree. Tools use the provided callbacks to read and
@@ -18,8 +23,11 @@ import { z } from "zod";
  */
 export function createTemplateAgentTools(
 	getFileTree: () => FileTree,
-	_setFileTree: (updater: (prev: FileTree) => FileTree) => void,
+	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
+	callbacks: TemplateAgentToolCallbacks = {},
 ) {
+	const { onFileEdited, onFileDeleted } = callbacks;
+
 	return {
 		listFiles: tool({
 			description:
@@ -43,6 +51,7 @@ export function createTemplateAgentTools(
 			inputSchema: z.object({
 				path: z
 					.string()
+					.min(1, "Path cannot be empty.")
 					.describe("File path relative to template root, e.g. 'main.tf'"),
 			}),
 			execute: async ({ path }) => {
@@ -67,7 +76,10 @@ export function createTemplateAgentTools(
 				"To append to an existing file, set oldContent to empty string. " +
 				"For targeted edits, provide enough context in oldContent to uniquely identify the location.",
 			inputSchema: z.object({
-				path: z.string().describe("File path relative to template root"),
+				path: z
+					.string()
+					.min(1, "Path cannot be empty.")
+					.describe("File path relative to template root"),
 				oldContent: z
 					.string()
 					.describe(
@@ -75,13 +87,36 @@ export function createTemplateAgentTools(
 					),
 				newContent: z.string().describe("Replacement text"),
 			}),
+			needsApproval: true,
+			execute: async ({ path, oldContent, newContent }) => {
+				const result = executeEditFile(getFileTree, setFileTree, {
+					path,
+					oldContent,
+					newContent,
+				});
+				if (result.success) {
+					onFileEdited?.(path);
+				}
+				return result;
+			},
 		}),
 
 		deleteFile: tool({
 			description: "Delete a file from the template.",
 			inputSchema: z.object({
-				path: z.string().describe("File path to delete"),
+				path: z
+					.string()
+					.min(1, "Path cannot be empty.")
+					.describe("File path to delete"),
 			}),
+			needsApproval: true,
+			execute: async ({ path }) => {
+				const result = executeDeleteFile(getFileTree, setFileTree, { path });
+				if (result.success) {
+					onFileDeleted?.(path);
+				}
+				return result;
+			},
 		}),
 	};
 }
@@ -96,6 +131,10 @@ export function executeEditFile(
 	args: { path: string; oldContent: string; newContent: string },
 ): { success: boolean; action?: string; error?: string; path: string } {
 	const { path, oldContent, newContent } = args;
+	if (path.length === 0) {
+		return { success: false, error: "File path cannot be empty.", path };
+	}
+
 	const tree = getFileTree();
 	const exists = existsFile(path, tree);
 
@@ -175,6 +214,10 @@ export function executeDeleteFile(
 	args: { path: string },
 ): { success: boolean; error?: string; path: string } {
 	const { path } = args;
+	if (path.length === 0) {
+		return { success: false, error: "File path cannot be empty.", path };
+	}
+
 	const tree = getFileTree();
 	if (!existsFile(path, tree)) {
 		return { success: false, error: `File not found: ${path}`, path };
