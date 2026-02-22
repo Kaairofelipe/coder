@@ -193,11 +193,14 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const [dirty, setDirty] = useState(false);
 	const [aiPanelOpen, setAIPanelOpen] = useState(false);
 	const { metadata } = useEmbeddedMetadata();
-	const { data: aiModels = [] } = useQuery(aiBridgeModels());
 	const { data: enabledExperiments = [] } = useQuery(
 		experiments(metadata.experiments),
 	);
 	const aiExperimentEnabled = enabledExperiments.includes("ai-template-editor");
+	const { data: aiModels = [] } = useQuery({
+		...aiBridgeModels(),
+		enabled: aiExperimentEnabled,
+	});
 	const aiModel = selectDefaultAIModel(aiModels);
 	const aiAvailable = aiExperimentEnabled && aiModel !== undefined;
 

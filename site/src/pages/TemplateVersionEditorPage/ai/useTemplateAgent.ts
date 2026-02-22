@@ -469,13 +469,14 @@ export const useTemplateAgent = ({
 			const newContent = current.args.newContent;
 			if (
 				typeof path !== "string" ||
+				path.length === 0 ||
 				typeof oldContent !== "string" ||
 				typeof newContent !== "string"
 			) {
 				toolResult = {
 					success: false,
 					error:
-						"editFile arguments are invalid. path, oldContent, and newContent must all be strings.",
+						"editFile arguments are invalid. path must be a non-empty string, and oldContent/newContent must be strings.",
 					path: typeof path === "string" ? path : "",
 				};
 			} else {
