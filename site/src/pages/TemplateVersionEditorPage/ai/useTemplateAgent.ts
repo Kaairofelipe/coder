@@ -15,9 +15,25 @@ import {
 } from "./tools";
 import type { AgentStatus, PendingToolCall } from "./types";
 
+/**
+ * Read the runtime CSRF token from the Axios instance's default
+ * headers. This is the correct token in both development (hardcoded)
+ * and production (derived from the page's meta tag at startup).
+ * Using API.getCsrfToken() would always return the hardcoded
+ * development-only value.
+ */
+function getRuntimeCsrfToken(): string {
+	const headers = API.getAxiosInstance().defaults.headers.common;
+	const token = headers["X-CSRF-TOKEN"];
+	if (typeof token === "string") {
+		return token;
+	}
+	return "";
+}
+
 const provider = createOpenAI({
 	baseURL: "/api/v2/aibridge/openai/v1",
-	headers: { "X-CSRF-TOKEN": API.getCsrfToken() },
+	headers: { "X-CSRF-TOKEN": getRuntimeCsrfToken() },
 });
 
 const MODEL_ID = "anthropic/claude-sonnet-4-20250514";

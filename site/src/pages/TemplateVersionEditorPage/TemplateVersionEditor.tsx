@@ -145,11 +145,22 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const [dirty, setDirty] = useState(false);
 	const [aiPanelOpen, setAIPanelOpen] = useState(false);
 	const [aiAvailable, setAIAvailable] = useState(false);
-	const getFileTree = useCallback(() => fileTree, [fileTree]);
+
+	// Use a ref so that getFileTree always returns the latest
+	// tree, including eagerly applied mutations that haven't
+	// flushed through a React re-render yet (e.g. after an AI
+	// tool edits a file and the agent loop resumes immediately).
+	const fileTreeRef = useRef(fileTree);
+	fileTreeRef.current = fileTree;
+
+	const getFileTree = useCallback(() => fileTreeRef.current, []);
 	const setFileTreeAndDirty = useCallback(
 		(updater: (prev: FileTree) => FileTree) => {
 			setFileTree((prev) => {
 				const next = updater(prev);
+				// Eagerly update the ref so that subsequent tool
+				// calls within the same tick see the latest tree.
+				fileTreeRef.current = next;
 				return next;
 			});
 			setDirty(true);
