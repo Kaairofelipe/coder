@@ -1,6 +1,6 @@
 import IconButton from "@mui/material/IconButton";
-import { API } from "api/api";
 import { getErrorDetail, getErrorMessage } from "api/errors";
+import { aiBridgeAvailable } from "api/queries/aiBridge";
 import type {
 	ProvisionerJobLog,
 	Template,
@@ -48,6 +48,7 @@ import { TemplateResourcesTable } from "modules/templates/TemplateResourcesTable
 import { WorkspaceBuildLogs } from "modules/workspaces/WorkspaceBuildLogs/WorkspaceBuildLogs";
 import type { PublishVersionData } from "pages/TemplateVersionEditorPage/types";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "react-query";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
 	Link as RouterLink,
@@ -144,7 +145,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const [renameFileOpen, setRenameFileOpen] = useState<string>();
 	const [dirty, setDirty] = useState(false);
 	const [aiPanelOpen, setAIPanelOpen] = useState(false);
-	const [aiAvailable, setAIAvailable] = useState(false);
+	const { data: aiAvailable = false } = useQuery(aiBridgeAvailable());
 
 	// Use a ref so that getFileTree always returns the latest
 	// tree, including eagerly applied mutations that haven't
@@ -234,22 +235,6 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		}
 		previousVersion.current = templateVersion;
 	}, [templateVersion, navigate, templateLink]);
-
-	useEffect(() => {
-		// Check if the AI bridge is configured by probing the models
-		// endpoint. Uses the project's Axios client (rather than raw
-		// fetch) so that CSRF and session headers are attached
-		// automatically and the call works in the jsdom test
-		// environment.
-		API.getAxiosInstance()
-			.get("/api/v2/aibridge/openai/v1/models", {
-				validateStatus: () => true,
-			})
-			.then((response) =>
-				setAIAvailable(response.status >= 200 && response.status < 300),
-			)
-			.catch(() => setAIAvailable(false));
-	}, []);
 
 	const editorValue = activePath ? getFileText(activePath, fileTree) : "";
 	const isEditorValueBinary =
@@ -640,6 +625,14 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 										getFileTree={getFileTree}
 										setFileTree={setFileTreeAndDirty}
 										onNavigateToFile={onActivePathChange}
+										onFileDeleted={(path) => {
+											// Clear the active path if the deleted
+											// file is currently open, matching the
+											// behavior of the manual delete flow.
+											if (activePath === path) {
+												onActivePathChange(undefined);
+											}
+										}}
 										onClose={() => {
 											setAIPanelOpen(false);
 										}}

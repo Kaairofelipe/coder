@@ -53,7 +53,10 @@ Rules:
 interface UseTemplateAgentOptions {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
+	/** Called after a file is created or edited so the editor can navigate to it. */
 	onFileEdited?: (path: string) => void;
+	/** Called after a file is deleted so the editor can clear the active path if needed. */
+	onFileDeleted?: (path: string) => void;
 }
 
 export interface DisplayToolCall {
@@ -133,6 +136,7 @@ export const useTemplateAgent = ({
 	getFileTree,
 	setFileTree,
 	onFileEdited,
+	onFileDeleted,
 }: UseTemplateAgentOptions) => {
 	const [messages, setMessages] = useState<DisplayMessage[]>([]);
 	const [status, setStatus] = useState<AgentStatus>("idle");
@@ -426,6 +430,9 @@ export const useTemplateAgent = ({
 				throw new Error("deleteFile arguments are invalid.");
 			}
 			toolResult = executeDeleteFile(getFileTree, setFileTree, { path });
+			if (isRecord(toolResult) && toolResult.success === true) {
+				onFileDeleted?.(path);
+			}
 		}
 
 		const nextMessages = executePendingTool(current, toolResult);
@@ -442,6 +449,7 @@ export const useTemplateAgent = ({
 	}, [
 		executePendingTool,
 		getFileTree,
+		onFileDeleted,
 		onFileEdited,
 		pendingApprovals,
 		runStream,

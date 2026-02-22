@@ -10,6 +10,7 @@ interface AIChatPanelProps {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
 	onNavigateToFile?: (path: string) => void;
+	onFileDeleted?: (path: string) => void;
 	onClose: () => void;
 }
 
@@ -17,6 +18,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 	getFileTree,
 	setFileTree,
 	onNavigateToFile,
+	onFileDeleted,
 	onClose,
 }) => {
 	const {
@@ -33,6 +35,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 		getFileTree,
 		setFileTree,
 		onFileEdited: onNavigateToFile,
+		onFileDeleted,
 	});
 
 	// Abort any active stream when the panel is unmounted so we
