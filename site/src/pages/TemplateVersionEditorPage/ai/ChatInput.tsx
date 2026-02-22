@@ -54,6 +54,7 @@ export const ChatInput: FC<ChatInputProps> = ({
 		(event: KeyboardEvent<HTMLTextAreaElement>) => {
 			if (event.key === "Enter" && !event.shiftKey) {
 				event.preventDefault();
+				event.stopPropagation();
 				handleSend();
 			}
 		},

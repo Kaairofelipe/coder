@@ -4,7 +4,7 @@ import {
 	type AssistantContent,
 	type ModelMessage,
 	stepCountIs,
-	streamText,
+	ToolLoopAgent,
 } from "ai";
 import { API } from "api/api";
 import { useCallback, useRef, useState } from "react";
@@ -67,6 +67,19 @@ Rules:
   to uniquely identify the edit location.
 - Keep HCL syntax valid. Use proper Terraform formatting conventions.
 - Explain what you're changing and why before making edits.`;
+
+const createTemplateAgent = (
+	modelId: string,
+	getFileTree: () => FileTree,
+	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
+) => {
+	return new ToolLoopAgent({
+		model: resolveProviderModel(modelId),
+		instructions: SYSTEM_PROMPT,
+		tools: createTemplateAgentTools(getFileTree, setFileTree),
+		stopWhen: stepCountIs(MAX_STEPS),
+	});
+};
 
 interface UseTemplateAgentOptions {
 	getFileTree: () => FileTree;
@@ -206,15 +219,18 @@ export const useTemplateAgent = ({
 			abortRef.current = abortController;
 			setStatus("streaming");
 
-			const tools = createTemplateAgentTools(getFileTree, setFileTree);
-			const result = streamText({
-				model: resolveProviderModel(modelId),
-				system: SYSTEM_PROMPT,
-				messages: coreMessages,
-				tools,
-				stopWhen: stepCountIs(MAX_STEPS),
-				abortSignal: abortController.signal,
-			});
+			const agent = createTemplateAgent(modelId, getFileTree, setFileTree);
+			let result: Awaited<ReturnType<typeof agent.stream>>;
+			try {
+				result = await agent.stream({
+					messages: coreMessages,
+					abortSignal: abortController.signal,
+				});
+			} catch {
+				setStatus("error");
+				abortRef.current = null;
+				return;
+			}
 
 			let currentAssistantId: string | null = null;
 			let currentText = "";

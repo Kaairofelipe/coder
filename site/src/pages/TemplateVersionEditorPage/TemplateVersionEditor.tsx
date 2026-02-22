@@ -83,6 +83,38 @@ import { TemplateVersionStatusBadge } from "./TemplateVersionStatusBadge";
 
 type Tab = "logs" | "resources" | undefined; // Undefined is to hide the tab
 
+const isLikelyChatModel = (modelId: string): boolean => {
+	const normalized = modelId.toLowerCase();
+	if (normalized.startsWith("anthropic/")) {
+		return true;
+	}
+
+	if (
+		normalized.includes("embed") ||
+		normalized.includes("moderation") ||
+		normalized.includes("whisper") ||
+		normalized.includes("transcription") ||
+		normalized.includes("tts") ||
+		normalized.includes("speech") ||
+		normalized.includes("image") ||
+		normalized.includes("dall-e") ||
+		normalized.includes("rerank")
+	) {
+		return false;
+	}
+
+	return (
+		normalized.includes("chat") ||
+		normalized.includes("instruct") ||
+		normalized.startsWith("gpt-") ||
+		normalized.startsWith("o1") ||
+		normalized.startsWith("o3") ||
+		normalized.startsWith("o4") ||
+		normalized.startsWith("claude-") ||
+		normalized.startsWith("gemini-")
+	);
+};
+
 interface TemplateVersionEditorProps {
 	template: Template;
 	templateVersion: TemplateVersion;
@@ -153,8 +185,8 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		experiments(metadata.experiments),
 	);
 	const aiExperimentEnabled = enabledExperiments.includes("ai-template-editor");
-	const aiAvailable = aiExperimentEnabled && aiModels.length > 0;
-	const aiModelId = aiModels[0];
+	const aiModelId = aiModels.find(isLikelyChatModel);
+	const aiAvailable = aiExperimentEnabled && aiModelId !== undefined;
 
 	// Use a ref so that getFileTree always returns the latest
 	// tree, including eagerly applied mutations that haven't
