@@ -219,6 +219,14 @@ export const useTemplateAgent = ({
 			abortRef.current = abortController;
 			setStatus("streaming");
 
+			const finishRun = (nextStatus: AgentStatus) => {
+				if (abortRef.current !== abortController) {
+					return;
+				}
+				abortRef.current = null;
+				setStatus(nextStatus);
+			};
+
 			const agent = createTemplateAgent(modelId, getFileTree, setFileTree);
 			let result: Awaited<ReturnType<typeof agent.stream>>;
 			try {
@@ -228,11 +236,10 @@ export const useTemplateAgent = ({
 				});
 			} catch {
 				if (!abortController.signal.aborted) {
-					setStatus("error");
+					finishRun("error");
 				} else {
-					setStatus("idle");
+					finishRun("idle");
 				}
-				abortRef.current = null;
 				return;
 			}
 
@@ -304,15 +311,13 @@ export const useTemplateAgent = ({
 				}
 			} catch {
 				if (!abortController.signal.aborted) {
-					setStatus("error");
+					finishRun("error");
 				}
-				abortRef.current = null;
 				return;
 			}
 
 			if (abortController.signal.aborted) {
-				setStatus("idle");
-				abortRef.current = null;
+				finishRun("idle");
 				return;
 			}
 
@@ -357,14 +362,12 @@ export const useTemplateAgent = ({
 			const nextPending = getPendingToolCalls(steps);
 			if (nextPending.length > 0) {
 				setPendingApprovals(nextPending);
-				setStatus("awaiting_approval");
-				abortRef.current = null;
+				finishRun("awaiting_approval");
 				return;
 			}
 
 			setPendingApprovals([]);
-			setStatus("idle");
-			abortRef.current = null;
+			finishRun("idle");
 		},
 		[getFileTree, modelId, setFileTree, updateAssistantMessage],
 	);

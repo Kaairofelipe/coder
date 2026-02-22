@@ -492,7 +492,12 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 						autoSaveId="template-editor-ai"
 						className="w-full min-h-full overflow-hidden"
 					>
-						<Panel minSize={40} className="[&>*]:h-full">
+						<Panel
+							id="template-editor-main"
+							order={1}
+							minSize={40}
+							className="[&>*]:h-full"
+						>
 							<div className="flex flex-col w-full min-h-full overflow-hidden">
 								<div className="flex-1 overflow-y-auto" data-chromatic="ignore">
 									{activePath ? (
@@ -661,7 +666,12 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 								<PanelResizeHandle>
 									<div className="h-full w-1 bg-border transition-colors hover:bg-content-link" />
 								</PanelResizeHandle>
-								<Panel defaultSize={30} minSize={20}>
+								<Panel
+									id="template-editor-ai"
+									order={2}
+									defaultSize={30}
+									minSize={20}
+								>
 									<AIChatPanel
 										getFileTree={getFileTree}
 										setFileTree={setFileTreeAndDirty}
