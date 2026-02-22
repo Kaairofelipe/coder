@@ -94,40 +94,39 @@ const asToolOutput = (value: unknown) => ({
 	value: (value ?? null) as never,
 });
 
-const getPendingToolCall = (
+/**
+ * Collect ALL tool calls from the last step that lack a result and
+ * require user approval. The model can emit parallel tool calls
+ * (e.g. two editFile calls), so we must handle every one rather
+ * than just the first.
+ */
+const getPendingToolCalls = (
 	steps: ReadonlyArray<{
 		toolCalls: ReadonlyArray<StreamToolCall>;
 		toolResults: ReadonlyArray<{ toolCallId: string }>;
 	}>,
-): PendingToolCall | null => {
+): PendingToolCall[] => {
 	const lastStep = steps[steps.length - 1];
 	if (!lastStep) {
-		return null;
+		return [];
 	}
 
 	const resultCallIds = new Set(
 		lastStep.toolResults.map((result) => result.toolCallId),
 	);
-	const pendingToolCall = lastStep.toolCalls.find(
-		(toolCall) => !resultCallIds.has(toolCall.toolCallId),
-	);
 
-	if (!pendingToolCall) {
-		return null;
-	}
-
-	if (
-		pendingToolCall.toolName !== "editFile" &&
-		pendingToolCall.toolName !== "deleteFile"
-	) {
-		return null;
-	}
-
-	return {
-		toolCallId: pendingToolCall.toolCallId,
-		toolName: pendingToolCall.toolName,
-		args: getToolCallArgs(pendingToolCall),
-	};
+	return lastStep.toolCalls
+		.filter(
+			(toolCall) =>
+				!resultCallIds.has(toolCall.toolCallId) &&
+				(toolCall.toolName === "editFile" ||
+					toolCall.toolName === "deleteFile"),
+		)
+		.map((toolCall) => ({
+			toolCallId: toolCall.toolCallId,
+			toolName: toolCall.toolName as "editFile" | "deleteFile",
+			args: getToolCallArgs(toolCall),
+		}));
 };
 
 export const useTemplateAgent = ({
@@ -137,8 +136,12 @@ export const useTemplateAgent = ({
 }: UseTemplateAgentOptions) => {
 	const [messages, setMessages] = useState<DisplayMessage[]>([]);
 	const [status, setStatus] = useState<AgentStatus>("idle");
-	const [pendingApproval, setPendingApproval] =
-		useState<PendingToolCall | null>(null);
+	// Queue of tool calls awaiting user approval. The UI shows
+	// the first item; approve/reject pops items off until the
+	// queue is drained, then the stream resumes.
+	const [pendingApprovals, setPendingApprovals] = useState<PendingToolCall[]>(
+		[],
+	);
 
 	const messageCounter = useRef(0);
 	const messagesRef = useRef<ModelMessage[]>([]);
@@ -307,15 +310,15 @@ export const useTemplateAgent = ({
 
 			messagesRef.current = nextMessages;
 
-			const nextPendingApproval = getPendingToolCall(steps);
-			if (nextPendingApproval) {
-				setPendingApproval(nextPendingApproval);
+			const nextPending = getPendingToolCalls(steps);
+			if (nextPending.length > 0) {
+				setPendingApprovals(nextPending);
 				setStatus("awaiting_approval");
 				abortRef.current = null;
 				return;
 			}
 
-			setPendingApproval(null);
+			setPendingApprovals([]);
 			setStatus("idle");
 			abortRef.current = null;
 		},
@@ -355,16 +358,52 @@ export const useTemplateAgent = ({
 		[runStream, status],
 	);
 
+	/**
+	 * Execute a pending tool call and append its result to the
+	 * conversation. Returns the updated core messages array.
+	 */
+	const executePendingTool = useCallback(
+		(pending: PendingToolCall, resultValue: unknown): ModelMessage[] => {
+			setMessages((prev) =>
+				prev.map((message) => ({
+					...message,
+					toolCalls: message.toolCalls.map((toolCall) =>
+						toolCall.toolCallId === pending.toolCallId
+							? { ...toolCall, result: resultValue, state: "result" as const }
+							: toolCall,
+					),
+				})),
+			);
+
+			const toolMessage: ModelMessage = {
+				role: "tool",
+				content: [
+					{
+						type: "tool-result",
+						toolCallId: pending.toolCallId,
+						toolName: pending.toolName,
+						output: asToolOutput(resultValue),
+					},
+				],
+			};
+			const next = [...messagesRef.current, toolMessage];
+			messagesRef.current = next;
+			return next;
+		},
+		[],
+	);
+
 	const approve = useCallback(() => {
-		if (!pendingApproval) {
+		const current = pendingApprovals[0];
+		if (!current) {
 			return;
 		}
 
 		let toolResult: unknown;
-		if (pendingApproval.toolName === "editFile") {
-			const path = pendingApproval.args.path;
-			const oldContent = pendingApproval.args.oldContent;
-			const newContent = pendingApproval.args.newContent;
+		if (current.toolName === "editFile") {
+			const path = current.args.path;
+			const oldContent = current.args.oldContent;
+			const newContent = current.args.newContent;
 			if (
 				typeof path !== "string" ||
 				typeof oldContent !== "string" ||
@@ -382,80 +421,50 @@ export const useTemplateAgent = ({
 				onFileEdited?.(path);
 			}
 		} else {
-			const path = pendingApproval.args.path;
+			const path = current.args.path;
 			if (typeof path !== "string") {
 				throw new Error("deleteFile arguments are invalid.");
 			}
 			toolResult = executeDeleteFile(getFileTree, setFileTree, { path });
 		}
 
-		setMessages((prev) =>
-			prev.map((message) => ({
-				...message,
-				toolCalls: message.toolCalls.map((toolCall) =>
-					toolCall.toolCallId === pendingApproval.toolCallId
-						? { ...toolCall, result: toolResult, state: "result" }
-						: toolCall,
-				),
-			})),
-		);
+		const nextMessages = executePendingTool(current, toolResult);
+		const remaining = pendingApprovals.slice(1);
 
-		const toolMessage: ModelMessage = {
-			role: "tool",
-			content: [
-				{
-					type: "tool-result",
-					toolCallId: pendingApproval.toolCallId,
-					toolName: pendingApproval.toolName,
-					output: asToolOutput(toolResult),
-				},
-			],
-		};
-		const nextMessages = [...messagesRef.current, toolMessage];
-		messagesRef.current = nextMessages;
-
-		setPendingApproval(null);
-		void runStream(nextMessages);
-	}, [getFileTree, onFileEdited, pendingApproval, runStream, setFileTree]);
+		if (remaining.length > 0) {
+			// More tool calls waiting for approval — stay in
+			// awaiting_approval state and show the next one.
+			setPendingApprovals(remaining);
+		} else {
+			setPendingApprovals([]);
+			void runStream(nextMessages);
+		}
+	}, [
+		executePendingTool,
+		getFileTree,
+		onFileEdited,
+		pendingApprovals,
+		runStream,
+		setFileTree,
+	]);
 
 	const reject = useCallback(() => {
-		if (!pendingApproval) {
+		const current = pendingApprovals[0];
+		if (!current) {
 			return;
 		}
 
 		const rejectionResult = { error: "User rejected this action." };
+		const nextMessages = executePendingTool(current, rejectionResult);
+		const remaining = pendingApprovals.slice(1);
 
-		setMessages((prev) =>
-			prev.map((message) => ({
-				...message,
-				toolCalls: message.toolCalls.map((toolCall) =>
-					toolCall.toolCallId === pendingApproval.toolCallId
-						? { ...toolCall, result: rejectionResult, state: "result" }
-						: toolCall,
-				),
-			})),
-		);
-
-		const toolMessage: ModelMessage = {
-			role: "tool",
-			content: [
-				{
-					type: "tool-result",
-					toolCallId: pendingApproval.toolCallId,
-					toolName: pendingApproval.toolName,
-					output: {
-						type: "execution-denied",
-						reason: "User rejected this action.",
-					},
-				},
-			],
-		};
-		const nextMessages = [...messagesRef.current, toolMessage];
-		messagesRef.current = nextMessages;
-
-		setPendingApproval(null);
-		void runStream(nextMessages);
-	}, [pendingApproval, runStream]);
+		if (remaining.length > 0) {
+			setPendingApprovals(remaining);
+		} else {
+			setPendingApprovals([]);
+			void runStream(nextMessages);
+		}
+	}, [executePendingTool, pendingApprovals, runStream]);
 
 	const stop = useCallback(() => {
 		abortRef.current?.abort();
@@ -468,9 +477,14 @@ export const useTemplateAgent = ({
 		abortRef.current = null;
 		messagesRef.current = [];
 		setMessages([]);
-		setPendingApproval(null);
+		setPendingApprovals([]);
 		setStatus("idle");
 	}, []);
+
+	// Expose the first pending item (or null) so the UI can show
+	// one approval card at a time.
+	const pendingApproval =
+		pendingApprovals.length > 0 ? pendingApprovals[0] : null;
 
 	return {
 		messages,

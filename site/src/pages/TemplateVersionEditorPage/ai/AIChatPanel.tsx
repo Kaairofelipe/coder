@@ -27,12 +27,22 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 		send,
 		approve,
 		reject,
+		stop,
 		reset,
 	} = useTemplateAgent({
 		getFileTree,
 		setFileTree,
 		onFileEdited: onNavigateToFile,
 	});
+
+	// Abort any active stream when the panel is unmounted so we
+	// don't leave orphaned network requests running in the
+	// background.
+	useEffect(() => {
+		return () => {
+			stop();
+		};
+	}, [stop]);
 
 	const listRef = useRef<HTMLDivElement>(null);
 

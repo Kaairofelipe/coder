@@ -98,9 +98,18 @@ export function executeEditFile(
 	const tree = getFileTree();
 	const exists = existsFile(path, tree);
 
-	// Create new file.
+	// Create new file. createFile can throw if the path is invalid
+	// (e.g. an intermediate segment is an existing file), so we
+	// catch and return a structured error instead of breaking the
+	// agent loop.
 	if (!exists && oldContent === "") {
-		setFileTree((prev) => createFile(path, prev, newContent));
+		try {
+			setFileTree((prev) => createFile(path, prev, newContent));
+		} catch (err) {
+			const message =
+				err instanceof Error ? err.message : "Failed to create file";
+			return { success: false, error: message, path };
+		}
 		return { success: true, action: "created", path };
 	}
 
