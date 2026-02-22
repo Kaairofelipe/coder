@@ -1,5 +1,4 @@
 import { tool } from "ai";
-import { z } from "zod";
 import type { FileTree } from "utils/filetree";
 import {
 	createFile,
@@ -9,6 +8,7 @@ import {
 	traverse,
 	updateFile,
 } from "utils/filetree";
+import { z } from "zod";
 
 /**
  * Creates the set of AI tools that operate on the template editor's
@@ -17,7 +17,7 @@ import {
  */
 export function createTemplateAgentTools(
 	getFileTree: () => FileTree,
-	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
+	_setFileTree: (updater: (prev: FileTree) => FileTree) => void,
 ) {
 	return {
 		listFiles: tool({
@@ -69,7 +69,9 @@ export function createTemplateAgentTools(
 				path: z.string().describe("File path relative to template root"),
 				oldContent: z
 					.string()
-					.describe("Exact text to find and replace (empty string to create/append)"),
+					.describe(
+						"Exact text to find and replace (empty string to create/append)",
+					),
 				newContent: z.string().describe("Replacement text"),
 			}),
 		}),
@@ -115,7 +117,11 @@ export function executeEditFile(
 	try {
 		current = getFileText(path, tree);
 	} catch {
-		return { success: false, error: `${path} is a directory, not a file.`, path };
+		return {
+			success: false,
+			error: `${path} is a directory, not a file.`,
+			path,
+		};
 	}
 
 	// Append or write.
@@ -143,7 +149,9 @@ export function executeEditFile(
 		};
 	}
 
-	setFileTree((prev) => updateFile(path, current.replace(oldContent, newContent), prev));
+	setFileTree((prev) =>
+		updateFile(path, current.replace(oldContent, newContent), prev),
+	);
 	return { success: true, action: "edited", path };
 }
 
