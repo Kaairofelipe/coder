@@ -49,6 +49,8 @@ const fetchProviderModels = async (
 const getModelKey = (model: AIBridgeModel): string =>
 	`${model.provider}:${model.id}`;
 
+const MODEL_DISCOVERY_REFRESH_MS = 60_000;
+
 /**
  * Query options that fetches the list of models available through the
  * AI bridge. We probe both OpenAI and Anthropic model-list endpoints because
@@ -82,10 +84,11 @@ export const aiBridgeModels = (): UseQueryOptions<AIBridgeModel[]> => ({
 		}
 		return models;
 	},
-	// The bridge config rarely changes, so cache for a long time
-	// and only re-check on mount.
-	staleTime: Number.POSITIVE_INFINITY,
-	refetchOnWindowFocus: false,
+	// Revalidate periodically so transient /models probe failures
+	// do not hide the assistant indefinitely.
+	staleTime: MODEL_DISCOVERY_REFRESH_MS,
+	refetchInterval: MODEL_DISCOVERY_REFRESH_MS,
+	refetchOnWindowFocus: true,
 });
 
 export const paginatedInterceptions = (

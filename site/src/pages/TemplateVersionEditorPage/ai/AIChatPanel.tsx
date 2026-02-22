@@ -1,8 +1,8 @@
 import type { AIBridgeProvider } from "api/queries/aiBridge";
 import { Button } from "components/Button/Button";
 import { RotateCcwIcon, SparklesIcon, XIcon } from "lucide-react";
-import { type FC, useEffect, useRef } from "react";
-import type { FileTree } from "utils/filetree";
+import { type FC, useCallback, useEffect, useRef } from "react";
+import { existsFile, isFolder, type FileTree } from "utils/filetree";
 import { ChatInput } from "./ChatInput";
 import { ChatMessage } from "./ChatMessage";
 import { useTemplateAgent } from "./useTemplateAgent";
@@ -26,6 +26,20 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 	onFileDeleted,
 	onClose,
 }) => {
+	const navigateToExistingFile = useCallback(
+		(path: string) => {
+			if (!onNavigateToFile || path.length === 0) {
+				return;
+			}
+			const tree = getFileTree();
+			if (!existsFile(path, tree) || isFolder(path, tree)) {
+				return;
+			}
+			onNavigateToFile(path);
+		},
+		[getFileTree, onNavigateToFile],
+	);
+
 	const {
 		messages,
 		isStreaming,
@@ -41,7 +55,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 		setFileTree,
 		modelId,
 		modelProvider,
-		onFileEdited: onNavigateToFile,
+		onFileEdited: navigateToExistingFile,
 		onFileDeleted,
 	});
 
@@ -109,7 +123,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 						pendingApproval={pendingApproval}
 						onApprove={approve}
 						onReject={reject}
-						onNavigateToFile={onNavigateToFile}
+						onNavigateToFile={navigateToExistingFile}
 					/>
 				))}
 			</div>
