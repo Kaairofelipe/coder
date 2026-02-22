@@ -1,3 +1,4 @@
+import type { AIBridgeProvider } from "api/queries/aiBridge";
 import { Button } from "components/Button/Button";
 import { RotateCcwIcon, SparklesIcon, XIcon } from "lucide-react";
 import { type FC, useEffect, useRef } from "react";
@@ -10,6 +11,7 @@ interface AIChatPanelProps {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
 	modelId: string;
+	modelProvider: AIBridgeProvider;
 	onNavigateToFile?: (path: string) => void;
 	onFileDeleted?: (path: string) => void;
 	onClose: () => void;
@@ -19,6 +21,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 	getFileTree,
 	setFileTree,
 	modelId,
+	modelProvider,
 	onNavigateToFile,
 	onFileDeleted,
 	onClose,
@@ -37,6 +40,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 		getFileTree,
 		setFileTree,
 		modelId,
+		modelProvider,
 		onFileEdited: onNavigateToFile,
 		onFileDeleted,
 	});

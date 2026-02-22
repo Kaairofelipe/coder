@@ -6,6 +6,7 @@ import {
 	stepCountIs,
 	ToolLoopAgent,
 } from "ai";
+import type { AIBridgeProvider } from "api/queries/aiBridge";
 import { API } from "api/api";
 import { useCallback, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
@@ -44,14 +45,21 @@ const anthropicProvider = createAnthropic({
 
 const anthropicModelPrefix = "anthropic/";
 
-const resolveProviderModel = (modelID: string) => {
-	if (modelID.startsWith(anthropicModelPrefix)) {
-		const anthropicModelID = modelID.slice(anthropicModelPrefix.length);
-		if (!anthropicModelID) {
+const resolveProviderModel = (provider: AIBridgeProvider, modelID: string) => {
+	if (modelID.length === 0) {
+		throw new Error("Model ID cannot be empty.");
+	}
+
+	if (provider === "anthropic") {
+		const anthropicModelID = modelID.startsWith(anthropicModelPrefix)
+			? modelID.slice(anthropicModelPrefix.length)
+			: modelID;
+		if (anthropicModelID.length === 0) {
 			throw new Error("Anthropic model ID cannot be empty.");
 		}
 		return anthropicProvider(anthropicModelID);
 	}
+
 	return openAIProvider(modelID);
 };
 
@@ -70,11 +78,12 @@ Rules:
 
 const createTemplateAgent = (
 	modelId: string,
+	modelProvider: AIBridgeProvider,
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
 ) => {
 	return new ToolLoopAgent({
-		model: resolveProviderModel(modelId),
+		model: resolveProviderModel(modelProvider, modelId),
 		instructions: SYSTEM_PROMPT,
 		tools: createTemplateAgentTools(getFileTree, setFileTree),
 		stopWhen: stepCountIs(MAX_STEPS),
@@ -85,6 +94,7 @@ interface UseTemplateAgentOptions {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
 	modelId: string;
+	modelProvider: AIBridgeProvider;
 	/** Called after a file is created or edited so the editor can navigate to it. */
 	onFileEdited?: (path: string) => void;
 	/** Called after a file is deleted so the editor can clear the active path if needed. */
@@ -168,6 +178,7 @@ export const useTemplateAgent = ({
 	getFileTree,
 	setFileTree,
 	modelId,
+	modelProvider,
 	onFileEdited,
 	onFileDeleted,
 }: UseTemplateAgentOptions) => {
@@ -227,7 +238,12 @@ export const useTemplateAgent = ({
 				setStatus(nextStatus);
 			};
 
-			const agent = createTemplateAgent(modelId, getFileTree, setFileTree);
+			const agent = createTemplateAgent(
+				modelId,
+				modelProvider,
+				getFileTree,
+				setFileTree,
+			);
 			let result: Awaited<ReturnType<typeof agent.stream>>;
 			try {
 				result = await agent.stream({
@@ -369,7 +385,7 @@ export const useTemplateAgent = ({
 			setPendingApprovals([]);
 			finishRun("idle");
 		},
-		[getFileTree, modelId, setFileTree, updateAssistantMessage],
+		[getFileTree, modelId, modelProvider, setFileTree, updateAssistantMessage],
 	);
 
 	const send = useCallback(

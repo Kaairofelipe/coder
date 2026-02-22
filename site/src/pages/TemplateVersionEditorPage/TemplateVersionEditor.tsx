@@ -1,6 +1,6 @@
 import IconButton from "@mui/material/IconButton";
 import { getErrorDetail, getErrorMessage } from "api/errors";
-import { aiBridgeModels } from "api/queries/aiBridge";
+import { aiBridgeModels, type AIBridgeModel } from "api/queries/aiBridge";
 import { experiments } from "api/queries/experiments";
 import type {
 	ProvisionerJobLog,
@@ -83,12 +83,12 @@ import { TemplateVersionStatusBadge } from "./TemplateVersionStatusBadge";
 
 type Tab = "logs" | "resources" | undefined; // Undefined is to hide the tab
 
-const isLikelyChatModel = (modelId: string): boolean => {
-	const normalized = modelId.toLowerCase();
-	if (normalized.startsWith("anthropic/")) {
+const isLikelyChatModel = (model: AIBridgeModel): boolean => {
+	if (model.provider === "anthropic") {
 		return true;
 	}
 
+	const normalized = model.id.toLowerCase();
 	if (
 		normalized.includes("embed") ||
 		normalized.includes("moderation") ||
@@ -113,6 +113,19 @@ const isLikelyChatModel = (modelId: string): boolean => {
 		normalized.startsWith("claude-") ||
 		normalized.startsWith("gemini-")
 	);
+};
+
+// Prefer model IDs that look chat-capable, but fall back to the first
+// discovered model so deployments with custom model naming can still use
+// the assistant.
+const selectDefaultAIModel = (
+	models: readonly AIBridgeModel[],
+): AIBridgeModel | undefined => {
+	const likelyChatModel = models.find(isLikelyChatModel);
+	if (likelyChatModel) {
+		return likelyChatModel;
+	}
+	return models[0];
 };
 
 interface TemplateVersionEditorProps {
@@ -185,8 +198,8 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		experiments(metadata.experiments),
 	);
 	const aiExperimentEnabled = enabledExperiments.includes("ai-template-editor");
-	const aiModelId = aiModels.find(isLikelyChatModel);
-	const aiAvailable = aiExperimentEnabled && aiModelId !== undefined;
+	const aiModel = selectDefaultAIModel(aiModels);
+	const aiAvailable = aiExperimentEnabled && aiModel !== undefined;
 
 	// Use a ref so that getFileTree always returns the latest
 	// tree, including eagerly applied mutations that haven't
@@ -661,7 +674,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 								</div>
 							</div>
 						</Panel>
-						{aiPanelOpen && aiModelId && (
+						{aiPanelOpen && aiModel && (
 							<>
 								<PanelResizeHandle>
 									<div className="h-full w-1 bg-border transition-colors hover:bg-content-link" />
@@ -675,7 +688,8 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 									<AIChatPanel
 										getFileTree={getFileTree}
 										setFileTree={setFileTreeAndDirty}
-										modelId={aiModelId}
+										modelId={aiModel.id}
+										modelProvider={aiModel.provider}
 										onNavigateToFile={onActivePathChange}
 										onFileDeleted={(path) => {
 											// Clear the active path if the deleted

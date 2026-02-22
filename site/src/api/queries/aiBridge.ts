@@ -4,10 +4,20 @@ import { useFilterParamsKey } from "components/Filter/Filter";
 import type { UsePaginatedQueryOptions } from "hooks/usePaginatedQuery";
 import type { UseQueryOptions } from "react-query";
 
+export type AIBridgeProvider = "openai" | "anthropic";
+
+export interface AIBridgeModel {
+	id: string;
+	provider: AIBridgeProvider;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null;
 
-const parseModelIDs = (body: unknown): string[] => {
+const parseProviderModels = (
+	body: unknown,
+	provider: AIBridgeProvider,
+): AIBridgeModel[] => {
 	if (!isRecord(body) || !Array.isArray(body.data)) {
 		return [];
 	}
@@ -16,46 +26,61 @@ const parseModelIDs = (body: unknown): string[] => {
 		if (!isRecord(model) || typeof model.id !== "string") {
 			return [];
 		}
-		return [model.id];
+		if (model.id.length === 0) {
+			return [];
+		}
+		return [{ id: model.id, provider }];
 	});
 };
 
-const fetchProviderModels = async (path: string): Promise<string[]> => {
+const fetchProviderModels = async (
+	path: string,
+	provider: AIBridgeProvider,
+): Promise<AIBridgeModel[]> => {
 	const response = await API.getAxiosInstance().get(path, {
 		validateStatus: () => true,
 	});
 	if (response.status < 200 || response.status >= 300) {
 		return [];
 	}
-	return parseModelIDs(response.data);
+	return parseProviderModels(response.data, provider);
 };
 
-const toOpenAICompatibleAnthropicModelID = (modelID: string): string =>
-	modelID.startsWith("anthropic/") ? modelID : `anthropic/${modelID}`;
+const getModelKey = (model: AIBridgeModel): string =>
+	`${model.provider}:${model.id}`;
 
 /**
- * Query options that fetches the list of model IDs available through the
+ * Query options that fetches the list of models available through the
  * AI bridge. We probe both OpenAI and Anthropic model-list endpoints because
  * deployments may configure either provider independently.
  *
  * Returns an empty array when the bridge is not configured or unreachable —
  * never throws.
  */
-export const aiBridgeModels = (): UseQueryOptions<string[]> => ({
+export const aiBridgeModels = (): UseQueryOptions<AIBridgeModel[]> => ({
 	queryKey: ["aiBridgeModels"],
 	queryFn: async () => {
 		const [openAIModels, anthropicModels] = await Promise.all([
-			fetchProviderModels("/api/v2/aibridge/openai/v1/models").catch(() => []),
-			fetchProviderModels("/api/v2/aibridge/anthropic/v1/models").catch(
+			fetchProviderModels("/api/v2/aibridge/openai/v1/models", "openai").catch(
 				() => [],
 			),
+			fetchProviderModels(
+				"/api/v2/aibridge/anthropic/v1/models",
+				"anthropic",
+			).catch(() => []),
 		]);
 
-		const normalizedAnthropicModels = anthropicModels.map(
-			toOpenAICompatibleAnthropicModelID,
-		);
-
-		return Array.from(new Set([...openAIModels, ...normalizedAnthropicModels]));
+		const seenModelKeys = new Set<string>();
+		const models: AIBridgeModel[] = [];
+		for (const model of [...openAIModels, ...anthropicModels]) {
+			const modelKey = getModelKey(model);
+			if (seenModelKeys.has(modelKey)) {
+				continue;
+			}
+			seenModelKeys.add(modelKey);
+			models.push(model);
+		}
+		return models;
 	},
 	// The bridge config rarely changes, so cache for a long time
 	// and only re-check on mount.
