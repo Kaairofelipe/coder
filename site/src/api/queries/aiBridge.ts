@@ -56,33 +56,41 @@ const MODEL_DISCOVERY_REFRESH_MS = 60_000;
  * AI bridge. We probe both OpenAI and Anthropic model-list endpoints because
  * deployments may configure either provider independently.
  *
- * Returns an empty array when the bridge is not configured or unreachable —
- * never throws.
+ * Returns an empty array when probes succeed but no models are configured.
+ * Throws when all discovered models are empty and at least one provider probe
+ * failed, allowing react-query to preserve previous successful data.
  */
 export const aiBridgeModels = (): UseQueryOptions<AIBridgeModel[]> => ({
 	queryKey: ["aiBridgeModels"],
 	queryFn: async () => {
-		const [openAIModels, anthropicModels] = await Promise.all([
-			fetchProviderModels("/api/v2/aibridge/openai/v1/models", "openai").catch(
-				() => [],
-			),
-			fetchProviderModels(
-				"/api/v2/aibridge/anthropic/v1/models",
-				"anthropic",
-			).catch(() => []),
+		const [openAIProbe, anthropicProbe] = await Promise.allSettled([
+			fetchProviderModels("/api/v2/aibridge/openai/v1/models", "openai"),
+			fetchProviderModels("/api/v2/aibridge/anthropic/v1/models", "anthropic"),
 		]);
 
+		const models = [openAIProbe, anthropicProbe].flatMap((probe) =>
+			probe.status === "fulfilled" ? probe.value : [],
+		);
+
+		const hadProbeFailure =
+			openAIProbe.status === "rejected" || anthropicProbe.status === "rejected";
+		if (models.length === 0 && hadProbeFailure) {
+			throw new Error(
+				"Failed to refresh AI bridge model discovery from one or more providers.",
+			);
+		}
+
 		const seenModelKeys = new Set<string>();
-		const models: AIBridgeModel[] = [];
-		for (const model of [...openAIModels, ...anthropicModels]) {
+		const dedupedModels: AIBridgeModel[] = [];
+		for (const model of models) {
 			const modelKey = getModelKey(model);
 			if (seenModelKeys.has(modelKey)) {
 				continue;
 			}
 			seenModelKeys.add(modelKey);
-			models.push(model);
+			dedupedModels.push(model);
 		}
-		return models;
+		return dedupedModels;
 	},
 	// Revalidate periodically so transient /models probe failures
 	// do not hide the assistant indefinitely.
