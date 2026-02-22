@@ -211,13 +211,11 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const getFileTree = useCallback(() => fileTreeRef.current, []);
 	const setFileTreeAndDirty = useCallback(
 		(updater: (prev: FileTree) => FileTree) => {
-			setFileTree((prev) => {
-				const next = updater(prev);
-				// Eagerly update the ref so that subsequent tool
-				// calls within the same tick see the latest tree.
-				fileTreeRef.current = next;
-				return next;
-			});
+			const next = updater(fileTreeRef.current);
+			// Update the ref immediately so resumed agent loops
+			// in this tick observe the approved file tree.
+			fileTreeRef.current = next;
+			setFileTree(next);
 			setDirty(true);
 		},
 		[],
