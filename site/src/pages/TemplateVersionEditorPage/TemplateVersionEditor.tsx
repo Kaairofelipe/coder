@@ -225,12 +225,18 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	}, [templateVersion, navigate, templateLink]);
 
 	useEffect(() => {
-		// Check if the AI bridge is configured by probing the models endpoint.
-		fetch("/api/v2/aibridge/openai/v1/models", {
-			method: "GET",
-			headers: { "X-CSRF-TOKEN": API.getCsrfToken() },
-		})
-			.then((response) => setAIAvailable(response.ok))
+		// Check if the AI bridge is configured by probing the models
+		// endpoint. Uses the project's Axios client (rather than raw
+		// fetch) so that CSRF and session headers are attached
+		// automatically and the call works in the jsdom test
+		// environment.
+		API.getAxiosInstance()
+			.get("/api/v2/aibridge/openai/v1/models", {
+				validateStatus: () => true,
+			})
+			.then((response) =>
+				setAIAvailable(response.status >= 200 && response.status < 300),
+			)
 			.catch(() => setAIAvailable(false));
 	}, []);
 
