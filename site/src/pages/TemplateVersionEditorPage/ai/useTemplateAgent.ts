@@ -36,7 +36,6 @@ const provider = createOpenAI({
 	headers: { "X-CSRF-TOKEN": getRuntimeCsrfToken() },
 });
 
-const MODEL_ID = "anthropic/claude-sonnet-4-20250514";
 const MAX_STEPS = 20;
 
 const SYSTEM_PROMPT = `You are a Terraform template editing assistant for Coder.
@@ -53,6 +52,7 @@ Rules:
 interface UseTemplateAgentOptions {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
+	modelId: string;
 	/** Called after a file is created or edited so the editor can navigate to it. */
 	onFileEdited?: (path: string) => void;
 	/** Called after a file is deleted so the editor can clear the active path if needed. */
@@ -135,6 +135,7 @@ const getPendingToolCalls = (
 export const useTemplateAgent = ({
 	getFileTree,
 	setFileTree,
+	modelId,
 	onFileEdited,
 	onFileDeleted,
 }: UseTemplateAgentOptions) => {
@@ -188,7 +189,7 @@ export const useTemplateAgent = ({
 
 			const tools = createTemplateAgentTools(getFileTree, setFileTree);
 			const result = streamText({
-				model: provider(MODEL_ID),
+				model: provider(modelId),
 				system: SYSTEM_PROMPT,
 				messages: coreMessages,
 				tools,
@@ -326,7 +327,7 @@ export const useTemplateAgent = ({
 			setStatus("idle");
 			abortRef.current = null;
 		},
-		[getFileTree, setFileTree, updateAssistantMessage],
+		[getFileTree, modelId, setFileTree, updateAssistantMessage],
 	);
 
 	const send = useCallback(

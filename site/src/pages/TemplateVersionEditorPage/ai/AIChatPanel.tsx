@@ -9,6 +9,7 @@ import { useTemplateAgent } from "./useTemplateAgent";
 interface AIChatPanelProps {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
+	modelId: string;
 	onNavigateToFile?: (path: string) => void;
 	onFileDeleted?: (path: string) => void;
 	onClose: () => void;
@@ -17,6 +18,7 @@ interface AIChatPanelProps {
 export const AIChatPanel: FC<AIChatPanelProps> = ({
 	getFileTree,
 	setFileTree,
+	modelId,
 	onNavigateToFile,
 	onFileDeleted,
 	onClose,
@@ -34,6 +36,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 	} = useTemplateAgent({
 		getFileTree,
 		setFileTree,
+		modelId,
 		onFileEdited: onNavigateToFile,
 		onFileDeleted,
 	});

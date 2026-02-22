@@ -4,6 +4,7 @@ import {
 	createFile,
 	existsFile,
 	getFileText,
+	isFolder,
 	removeFile,
 	traverse,
 	updateFile,
@@ -177,6 +178,13 @@ export function executeDeleteFile(
 	const tree = getFileTree();
 	if (!existsFile(path, tree)) {
 		return { success: false, error: `File not found: ${path}`, path };
+	}
+	if (isFolder(path, tree)) {
+		return {
+			success: false,
+			error: `${path} is a directory, not a file. Delete individual files instead.`,
+			path,
+		};
 	}
 	setFileTree((prev) => removeFile(path, prev));
 	return { success: true, path };

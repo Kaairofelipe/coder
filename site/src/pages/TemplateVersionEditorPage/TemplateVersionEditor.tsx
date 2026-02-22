@@ -1,6 +1,6 @@
 import IconButton from "@mui/material/IconButton";
 import { getErrorDetail, getErrorMessage } from "api/errors";
-import { aiBridgeAvailable } from "api/queries/aiBridge";
+import { aiBridgeModels } from "api/queries/aiBridge";
 import type {
 	ProvisionerJobLog,
 	Template,
@@ -145,7 +145,9 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const [renameFileOpen, setRenameFileOpen] = useState<string>();
 	const [dirty, setDirty] = useState(false);
 	const [aiPanelOpen, setAIPanelOpen] = useState(false);
-	const { data: aiAvailable = false } = useQuery(aiBridgeAvailable());
+	const { data: aiModels = [] } = useQuery(aiBridgeModels());
+	const aiAvailable = aiModels.length > 0;
+	const aiModelId = aiModels[0];
 
 	// Use a ref so that getFileTree always returns the latest
 	// tree, including eagerly applied mutations that haven't
@@ -615,7 +617,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 								</div>
 							</div>
 						</Panel>
-						{aiPanelOpen && (
+						{aiPanelOpen && aiModelId && (
 							<>
 								<PanelResizeHandle>
 									<div className="h-full w-1 bg-border transition-colors hover:bg-content-link" />
@@ -624,6 +626,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 									<AIChatPanel
 										getFileTree={getFileTree}
 										setFileTree={setFileTreeAndDirty}
+										modelId={aiModelId}
 										onNavigateToFile={onActivePathChange}
 										onFileDeleted={(path) => {
 											// Clear the active path if the deleted
