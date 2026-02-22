@@ -35,6 +35,7 @@
 		"update-emojis": "cp -rf ./node_modules/emoji-datasource-apple/img/apple/64/* ./static/emojis && cp -f ./node_modules/emoji-datasource-apple/img/apple/sheets-256/64.png ./static/emojis/spritesheet.png"
 	},
 	"dependencies": {
+		"@ai-sdk/anthropic": "^3.0.46",
 		"@ai-sdk/openai": "^3.0.30",
 		"@emoji-mart/data": "1.2.1",
 		"@emoji-mart/react": "1.1.1",

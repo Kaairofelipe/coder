@@ -1,3 +1,4 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import {
 	type AssistantContent,
@@ -31,10 +32,28 @@ function getRuntimeCsrfToken(): string {
 	return "";
 }
 
-const provider = createOpenAI({
+const openAIProvider = createOpenAI({
 	baseURL: "/api/v2/aibridge/openai/v1",
 	headers: { "X-CSRF-TOKEN": getRuntimeCsrfToken() },
 });
+
+const anthropicProvider = createAnthropic({
+	baseURL: "/api/v2/aibridge/anthropic/v1",
+	headers: { "X-CSRF-TOKEN": getRuntimeCsrfToken() },
+});
+
+const anthropicModelPrefix = "anthropic/";
+
+const resolveProviderModel = (modelID: string) => {
+	if (modelID.startsWith(anthropicModelPrefix)) {
+		const anthropicModelID = modelID.slice(anthropicModelPrefix.length);
+		if (!anthropicModelID) {
+			throw new Error("Anthropic model ID cannot be empty.");
+		}
+		return anthropicProvider(anthropicModelID);
+	}
+	return openAIProvider(modelID);
+};
 
 const MAX_STEPS = 20;
 
@@ -189,7 +208,7 @@ export const useTemplateAgent = ({
 
 			const tools = createTemplateAgentTools(getFileTree, setFileTree);
 			const result = streamText({
-				model: provider(modelId),
+				model: resolveProviderModel(modelId),
 				system: SYSTEM_PROMPT,
 				messages: coreMessages,
 				tools,
