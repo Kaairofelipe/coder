@@ -4,40 +4,58 @@ import { useFilterParamsKey } from "components/Filter/Filter";
 import type { UsePaginatedQueryOptions } from "hooks/usePaginatedQuery";
 import type { UseQueryOptions } from "react-query";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null;
+
+const parseModelIDs = (body: unknown): string[] => {
+	if (!isRecord(body) || !Array.isArray(body.data)) {
+		return [];
+	}
+
+	return body.data.flatMap((model) => {
+		if (!isRecord(model) || typeof model.id !== "string") {
+			return [];
+		}
+		return [model.id];
+	});
+};
+
+const fetchProviderModels = async (path: string): Promise<string[]> => {
+	const response = await API.getAxiosInstance().get(path, {
+		validateStatus: () => true,
+	});
+	if (response.status < 200 || response.status >= 300) {
+		return [];
+	}
+	return parseModelIDs(response.data);
+};
+
+const toOpenAICompatibleAnthropicModelID = (modelID: string): string =>
+	modelID.startsWith("anthropic/") ? modelID : `anthropic/${modelID}`;
+
 /**
  * Query options that fetches the list of model IDs available through the
- * AI bridge. Returns an empty array when the bridge is not configured or
- * unreachable — never throws.
+ * AI bridge. We probe both OpenAI and Anthropic model-list endpoints because
+ * deployments may configure either provider independently.
+ *
+ * Returns an empty array when the bridge is not configured or unreachable —
+ * never throws.
  */
 export const aiBridgeModels = (): UseQueryOptions<string[]> => ({
 	queryKey: ["aiBridgeModels"],
 	queryFn: async () => {
-		const response = await API.getAxiosInstance().get(
-			"/api/v2/aibridge/openai/v1/models",
-			{ validateStatus: () => true },
-		);
-		if (response.status < 200 || response.status >= 300) {
-			return [];
-		}
+		const [openAIModels, anthropicModels] = await Promise.all([
+			fetchProviderModels("/api/v2/aibridge/openai/v1/models").catch(() => []),
+			fetchProviderModels("/api/v2/aibridge/anthropic/v1/models").catch(
+				() => [],
+			),
+		]);
 
-		// The response follows the OpenAI List Models format:
-		// { data: [{ id: "model-id", ... }, ...] }
-		const body = response.data;
-		if (
-			typeof body === "object" &&
-			body !== null &&
-			Array.isArray(body.data)
-		) {
-			return body.data
-				.filter(
-					(model: unknown): model is { id: string } =>
-						typeof model === "object" &&
-						model !== null &&
-						typeof (model as Record<string, unknown>).id === "string",
-				)
-				.map((model: { id: string }) => model.id);
-		}
-		return [];
+		const normalizedAnthropicModels = anthropicModels.map(
+			toOpenAICompatibleAnthropicModelID,
+		);
+
+		return Array.from(new Set([...openAIModels, ...normalizedAnthropicModels]));
 	},
 	// The bridge config rarely changes, so cache for a long time
 	// and only re-check on mount.
