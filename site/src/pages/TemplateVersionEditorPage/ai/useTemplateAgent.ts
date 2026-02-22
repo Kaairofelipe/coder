@@ -449,25 +449,36 @@ export const useTemplateAgent = ({
 				typeof oldContent !== "string" ||
 				typeof newContent !== "string"
 			) {
-				throw new Error("editFile arguments are invalid.");
-			}
-
-			toolResult = executeEditFile(getFileTree, setFileTree, {
-				path,
-				oldContent,
-				newContent,
-			});
-			if (isRecord(toolResult) && toolResult.success === true) {
-				onFileEdited?.(path);
+				toolResult = {
+					success: false,
+					error:
+						"editFile arguments are invalid. path, oldContent, and newContent must all be strings.",
+					path: typeof path === "string" ? path : "",
+				};
+			} else {
+				toolResult = executeEditFile(getFileTree, setFileTree, {
+					path,
+					oldContent,
+					newContent,
+				});
+				if (isRecord(toolResult) && toolResult.success === true) {
+					onFileEdited?.(path);
+				}
 			}
 		} else {
 			const path = current.args.path;
-			if (typeof path !== "string") {
-				throw new Error("deleteFile arguments are invalid.");
-			}
-			toolResult = executeDeleteFile(getFileTree, setFileTree, { path });
-			if (isRecord(toolResult) && toolResult.success === true) {
-				onFileDeleted?.(path);
+			if (typeof path !== "string" || path.length === 0) {
+				toolResult = {
+					success: false,
+					error:
+						"deleteFile arguments are invalid. path must be a non-empty string.",
+					path: typeof path === "string" ? path : "",
+				};
+			} else {
+				toolResult = executeDeleteFile(getFileTree, setFileTree, { path });
+				if (isRecord(toolResult) && toolResult.success === true) {
+					onFileDeleted?.(path);
+				}
 			}
 		}
 

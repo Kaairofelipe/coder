@@ -55,9 +55,8 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 	onNavigateToFile,
 }) => {
 	const path = typeof toolCall.args.path === "string" ? toolCall.args.path : "";
-	if (!path) {
-		throw new Error("Edit and delete tool calls require a path argument.");
-	}
+	const hasValidPath = path.length > 0;
+	const pathLabel = hasValidPath ? path : "(invalid path)";
 
 	const oldContent =
 		typeof toolCall.args.oldContent === "string"
@@ -89,16 +88,28 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 				)}
 				<button
 					type="button"
-					onClick={() => onNavigateToFile?.(path)}
-					disabled={!onNavigateToFile}
+					onClick={() => {
+						if (hasValidPath) {
+							onNavigateToFile?.(path);
+						}
+					}}
+					disabled={!onNavigateToFile || !hasValidPath}
 					className={cn(
 						"text-left text-xs font-medium text-content-link hover:underline",
-						onNavigateToFile ? "cursor-pointer" : "cursor-default",
+						onNavigateToFile && hasValidPath
+							? "cursor-pointer"
+							: "cursor-default",
 					)}
 				>
-					{path}
+					{pathLabel}
 				</button>
 			</div>
+
+			{!hasValidPath && (
+				<div className="rounded-md border border-solid border-border-destructive bg-surface-destructive/20 p-2 text-xs text-content-destructive">
+					This tool call is missing a valid file path.
+				</div>
+			)}
 
 			{toolCall.toolName === "editFile" ? (
 				<div className="max-h-56 overflow-y-auto rounded-md border border-solid border-border-default bg-surface-primary">
@@ -128,7 +139,7 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 				</div>
 			) : (
 				<div className="rounded-md border border-solid border-border-destructive bg-surface-destructive/20 p-2 text-xs text-content-destructive">
-					Delete file: {path}
+					Delete file: {pathLabel}
 				</div>
 			)}
 
