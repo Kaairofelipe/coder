@@ -1,4 +1,5 @@
 import IconButton from "@mui/material/IconButton";
+import { API } from "api/api";
 import { getErrorDetail, getErrorMessage } from "api/errors";
 import type {
 	ProvisionerJobLog,
@@ -30,6 +31,7 @@ import {
 	ExternalLinkIcon,
 	PlayIcon,
 	PlusIcon,
+	SparklesIcon,
 	TriangleAlertIcon,
 	XIcon,
 } from "lucide-react";
@@ -46,6 +48,7 @@ import { TemplateResourcesTable } from "modules/templates/TemplateResourcesTable
 import { WorkspaceBuildLogs } from "modules/workspaces/WorkspaceBuildLogs/WorkspaceBuildLogs";
 import type { PublishVersionData } from "pages/TemplateVersionEditorPage/types";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
 	Link as RouterLink,
 	useNavigate,
@@ -63,6 +66,7 @@ import {
 	removeFile,
 	updateFile,
 } from "utils/filetree";
+import { AIChatPanel } from "./ai/AIChatPanel";
 import {
 	CreateFileDialog,
 	DeleteFileDialog,
@@ -139,6 +143,19 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const [deleteFileOpen, setDeleteFileOpen] = useState<string>();
 	const [renameFileOpen, setRenameFileOpen] = useState<string>();
 	const [dirty, setDirty] = useState(false);
+	const [aiPanelOpen, setAIPanelOpen] = useState(false);
+	const [aiAvailable, setAIAvailable] = useState(false);
+	const getFileTree = useCallback(() => fileTree, [fileTree]);
+	const setFileTreeAndDirty = useCallback(
+		(updater: (prev: FileTree) => FileTree) => {
+			setFileTree((prev) => {
+				const next = updater(prev);
+				return next;
+			});
+			setDirty(true);
+		},
+		[],
+	);
 	const matchingProvisioners = templateVersion.matched_provisioners?.count;
 	const availableProvisioners = templateVersion.matched_provisioners?.available;
 
@@ -207,6 +224,16 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		previousVersion.current = templateVersion;
 	}, [templateVersion, navigate, templateLink]);
 
+	useEffect(() => {
+		// Check if the AI bridge is configured by probing the models endpoint.
+		fetch("/api/v2/aibridge/openai/v1/models", {
+			method: "GET",
+			headers: { "X-CSRF-TOKEN": API.getCsrfToken() },
+		})
+			.then((response) => setAIAvailable(response.ok))
+			.catch(() => setAIAvailable(false));
+	}, []);
+
 	const editorValue = activePath ? getFileText(activePath, fileTree) : "";
 	const isEditorValueBinary =
 		typeof editorValue === "string" ? isBinaryData(editorValue) : false;
@@ -250,6 +277,17 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 					</TopbarData>
 
 					<div className="flex items-center justify-end gap-2 pr-4">
+						{aiAvailable && (
+							<TopbarIconButton
+								title="AI Assistant"
+								onClick={() => {
+									setAIPanelOpen((v) => !v);
+								}}
+								className={aiPanelOpen ? "text-content-link" : undefined}
+							>
+								<SparklesIcon className="size-icon-sm" />
+							</TopbarIconButton>
+						)}
 						<span className="mr-2">
 							<Button asChild size="sm" variant="outline">
 								<a
@@ -406,165 +444,193 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 						/>
 					</Sidebar>
 
-					<div className="flex flex-col w-full min-h-full overflow-hidden">
-						<div className="flex-1 overflow-y-auto" data-chromatic="ignore">
-							{activePath ? (
-								isEditorValueBinary ? (
-									<div
-										role="alert"
-										className="w-full h-full flex items-center justify-center p-10"
-									>
-										<div className="flex flex-col items-center max-w-[420px] text-center">
-											<TriangleAlertIcon className="text-content-warning size-icon-lg" />
-											<p className="m-0 p-0 mt-6">
-												The file is not displayed in the text editor because it
-												is either binary or uses an unsupported text encoding.
-											</p>
-										</div>
-									</div>
-								) : (
-									<MonacoEditor
-										value={editorValue}
-										path={activePath}
-										onChange={(value) => {
-											if (!activePath) {
-												return;
-											}
-											setFileTree((fileTree) =>
-												updateFile(activePath, value, fileTree),
-											);
-											setDirty(true);
-										}}
-									/>
-								)
-							) : (
-								<div>No file opened</div>
-							)}
-						</div>
-
-						<div className="border-0 border-t border-solid border-border overflow-hidden flex flex-col">
-							<div
-								className={cn(
-									"flex items-center",
-									selectedTab && "border-0 border-b border-solid border-border",
-								)}
-							>
-								<div className="flex">
-									<button
-										type="button"
-										disabled={!buildLogs}
-										className={tabClassName(selectedTab === "logs")}
-										onClick={() => {
-											setSelectedTab("logs");
-										}}
-									>
-										Output
-									</button>
-
-									<button
-										type="button"
-										disabled={!canPublish}
-										className={tabClassName(selectedTab === "resources")}
-										onClick={() => {
-											setSelectedTab("resources");
-										}}
-									>
-										Resources
-									</button>
+					<PanelGroup
+						direction="horizontal"
+						autoSaveId="template-editor-ai"
+						className="w-full min-h-full overflow-hidden"
+					>
+						<Panel minSize={40} className="[&>*]:h-full">
+							<div className="flex flex-col w-full min-h-full overflow-hidden">
+								<div className="flex-1 overflow-y-auto" data-chromatic="ignore">
+									{activePath ? (
+										isEditorValueBinary ? (
+											<div
+												role="alert"
+												className="w-full h-full flex items-center justify-center p-10"
+											>
+												<div className="flex flex-col items-center max-w-[420px] text-center">
+													<TriangleAlertIcon className="text-content-warning size-icon-lg" />
+													<p className="m-0 p-0 mt-6">
+														The file is not displayed in the text editor because
+														it is either binary or uses an unsupported text
+														encoding.
+													</p>
+												</div>
+											</div>
+										) : (
+											<MonacoEditor
+												value={editorValue}
+												path={activePath}
+												onChange={(value) => {
+													if (!activePath) {
+														return;
+													}
+													setFileTree((fileTree) =>
+														updateFile(activePath, value, fileTree),
+													);
+													setDirty(true);
+												}}
+											/>
+										)
+									) : (
+										<div>No file opened</div>
+									)}
 								</div>
 
-								{selectedTab === "logs" && gotBuildLogs && (
-									<a
-										href={`/api/v2/templateversions/${templateVersion.id}/logs?format=text`}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="flex items-center gap-1 px-3 text-xs text-content-secondary hover:text-content-primary"
-									>
-										View raw logs
-										<ExternalLinkIcon className="size-3" />
-									</a>
-								)}
-
-								{selectedTab && (
-									<IconButton
-										onClick={() => {
-											setSelectedTab(undefined);
-										}}
+								<div className="border-0 border-t border-solid border-border overflow-hidden flex flex-col">
+									<div
 										className={cn(
-											"w-9 h-9 rounded-none",
-											(selectedTab !== "logs" || !gotBuildLogs) && "ml-auto",
+											"flex items-center",
+											selectedTab &&
+												"border-0 border-b border-solid border-border",
 										)}
 									>
-										<XIcon className="size-icon-xs" />
-									</IconButton>
-								)}
-							</div>
+										<div className="flex">
+											<button
+												type="button"
+												disabled={!buildLogs}
+												className={tabClassName(selectedTab === "logs")}
+												onClick={() => {
+													setSelectedTab("logs");
+												}}
+											>
+												Output
+											</button>
 
-							{selectedTab === "logs" && (
-								<div className="flex flex-col h-[280px] overflow-y-auto">
-									{templateVersion.job.error ? (
-										<div>
-											<ProvisionerAlert
-												title="Error during the build"
-												detail={templateVersion.job.error}
-												severity="error"
-												tags={templateVersion.job.tags}
-												variant={AlertVariant.Inline}
-											/>
+											<button
+												type="button"
+												disabled={!canPublish}
+												className={tabClassName(selectedTab === "resources")}
+												onClick={() => {
+													setSelectedTab("resources");
+												}}
+											>
+												Resources
+											</button>
 										</div>
-									) : (
-										!gotBuildLogs && (
-											<>
-												<ProvisionerStatusAlert
-													matchingProvisioners={matchingProvisioners}
-													availableProvisioners={availableProvisioners}
-													tags={templateVersion.job.tags}
-													variant={AlertVariant.Inline}
+
+										{selectedTab === "logs" && gotBuildLogs && (
+											<a
+												href={`/api/v2/templateversions/${templateVersion.id}/logs?format=text`}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="flex items-center gap-1 px-3 text-xs text-content-secondary hover:text-content-primary"
+											>
+												View raw logs
+												<ExternalLinkIcon className="size-3" />
+											</a>
+										)}
+
+										{selectedTab && (
+											<IconButton
+												onClick={() => {
+													setSelectedTab(undefined);
+												}}
+												className={cn(
+													"w-9 h-9 rounded-none",
+													(selectedTab !== "logs" || !gotBuildLogs) &&
+														"ml-auto",
+												)}
+											>
+												<XIcon className="size-icon-xs" />
+											</IconButton>
+										)}
+									</div>
+
+									{selectedTab === "logs" && (
+										<div className="flex flex-col h-[280px] overflow-y-auto">
+											{templateVersion.job.error ? (
+												<div>
+													<ProvisionerAlert
+														title="Error during the build"
+														detail={templateVersion.job.error}
+														severity="error"
+														tags={templateVersion.job.tags}
+														variant={AlertVariant.Inline}
+													/>
+												</div>
+											) : (
+												!gotBuildLogs && (
+													<>
+														<ProvisionerStatusAlert
+															matchingProvisioners={matchingProvisioners}
+															availableProvisioners={availableProvisioners}
+															tags={templateVersion.job.tags}
+															variant={AlertVariant.Inline}
+														/>
+														<Loader className="h-full" />
+													</>
+												)
+											)}
+
+											{gotBuildLogs && (
+												<WorkspaceBuildLogs
+													className={cn(
+														"rounded-none border-0",
+														"[&_.logs-header]:border-0 [&_.logs-header]:px-4 [&_.logs-header]:py-2 [&_.logs-header]:font-mono",
+														"[&_.logs-header:first-of-type]:pt-4 [&_.logs-header:last-child]:pb-4",
+														"[&_.logs-line]:pl-4",
+														"[&_.logs-container]:!border-0",
+													)}
+													hideTimestamps
+													logs={buildLogs}
 												/>
-												<Loader className="h-full" />
-											</>
-										)
+											)}
+
+											{resources && (
+												<WildcardHostnameWarning resources={resources} />
+											)}
+										</div>
 									)}
 
-									{gotBuildLogs && (
-										<WorkspaceBuildLogs
+									{selectedTab === "resources" && (
+										<div
 											className={cn(
-												"rounded-none border-0",
-												"[&_.logs-header]:border-0 [&_.logs-header]:px-4 [&_.logs-header]:py-2 [&_.logs-header]:font-mono",
-												"[&_.logs-header:first-of-type]:pt-4 [&_.logs-header:last-child]:pb-4",
-												"[&_.logs-line]:pl-4",
-												"[&_.logs-container]:!border-0",
+												"h-[280px] overflow-y-auto",
+												"[&_.resource-card]:border-l-0 [&_.resource-card]:border-r-0",
+												"[&_.resource-card:first-of-type]:border-t-0 [&_.resource-card:last-child]:border-b-0",
 											)}
-											hideTimestamps
-											logs={buildLogs}
-										/>
-									)}
-
-									{resources && (
-										<WildcardHostnameWarning resources={resources} />
+										>
+											{resources && (
+												<TemplateResourcesTable
+													resources={resources.filter(
+														(r) => r.workspace_transition === "start",
+													)}
+												/>
+											)}
+										</div>
 									)}
 								</div>
-							)}
-
-							{selectedTab === "resources" && (
-								<div
-									className={cn(
-										"h-[280px] overflow-y-auto",
-										"[&_.resource-card]:border-l-0 [&_.resource-card]:border-r-0",
-										"[&_.resource-card:first-of-type]:border-t-0 [&_.resource-card:last-child]:border-b-0",
-									)}
-								>
-									{resources && (
-										<TemplateResourcesTable
-											resources={resources.filter(
-												(r) => r.workspace_transition === "start",
-											)}
-										/>
-									)}
-								</div>
-							)}
-						</div>
-					</div>
+							</div>
+						</Panel>
+						{aiPanelOpen && (
+							<>
+								<PanelResizeHandle>
+									<div className="h-full w-1 bg-border transition-colors hover:bg-content-link" />
+								</PanelResizeHandle>
+								<Panel defaultSize={30} minSize={20}>
+									<AIChatPanel
+										getFileTree={getFileTree}
+										setFileTree={setFileTreeAndDirty}
+										onNavigateToFile={onActivePathChange}
+										onClose={() => {
+											setAIPanelOpen(false);
+										}}
+									/>
+								</Panel>
+							</>
+						)}
+					</PanelGroup>
 				</div>
 			</div>
 
