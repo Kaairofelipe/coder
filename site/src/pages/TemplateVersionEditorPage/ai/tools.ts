@@ -125,7 +125,7 @@ export function createTemplateAgentTools(
  * Execute the editFile tool logic. Separated from the tool definition
  * so it can be called after user approval.
  */
-export function executeEditFile(
+function executeEditFile(
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
 	args: { path: string; oldContent: string; newContent: string },
@@ -208,7 +208,7 @@ export function executeEditFile(
  * Execute the deleteFile tool logic. Separated from the tool definition
  * so it can be called after user approval.
  */
-export function executeDeleteFile(
+function executeDeleteFile(
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
 	args: { path: string },
