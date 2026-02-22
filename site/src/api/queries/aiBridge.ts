@@ -41,7 +41,9 @@ const fetchProviderModels = async (
 		validateStatus: () => true,
 	});
 	if (response.status < 200 || response.status >= 300) {
-		return [];
+		throw new Error(
+			`AI bridge model probe failed for ${provider} (HTTP ${response.status}).`,
+		);
 	}
 	return parseProviderModels(response.data, provider);
 };
