@@ -227,7 +227,11 @@ export const useTemplateAgent = ({
 					abortSignal: abortController.signal,
 				});
 			} catch {
-				setStatus("error");
+				if (!abortController.signal.aborted) {
+					setStatus("error");
+				} else {
+					setStatus("idle");
+				}
 				abortRef.current = null;
 				return;
 			}
