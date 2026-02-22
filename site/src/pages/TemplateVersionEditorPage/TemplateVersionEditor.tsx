@@ -1,6 +1,7 @@
 import IconButton from "@mui/material/IconButton";
 import { getErrorDetail, getErrorMessage } from "api/errors";
 import { aiBridgeModels } from "api/queries/aiBridge";
+import { experiments } from "api/queries/experiments";
 import type {
 	ProvisionerJobLog,
 	Template,
@@ -36,6 +37,7 @@ import {
 	XIcon,
 } from "lucide-react";
 import { linkToTemplate, useLinks } from "modules/navigation";
+import { useEmbeddedMetadata } from "hooks/useEmbeddedMetadata";
 import {
 	AlertVariant,
 	ProvisionerAlert,
@@ -145,8 +147,13 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const [renameFileOpen, setRenameFileOpen] = useState<string>();
 	const [dirty, setDirty] = useState(false);
 	const [aiPanelOpen, setAIPanelOpen] = useState(false);
+	const { metadata } = useEmbeddedMetadata();
 	const { data: aiModels = [] } = useQuery(aiBridgeModels());
-	const aiAvailable = aiModels.length > 0;
+	const { data: enabledExperiments = [] } = useQuery(
+		experiments(metadata.experiments),
+	);
+	const aiExperimentEnabled = enabledExperiments.includes("ai-template-editor");
+	const aiAvailable = aiExperimentEnabled && aiModels.length > 0;
 	const aiModelId = aiModels[0];
 
 	// Use a ref so that getFileTree always returns the latest
