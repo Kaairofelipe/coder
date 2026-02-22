@@ -2,7 +2,7 @@ import type { AIBridgeProvider } from "api/queries/aiBridge";
 import { Button } from "components/Button/Button";
 import { RotateCcwIcon, SparklesIcon, XIcon } from "lucide-react";
 import { type FC, useCallback, useEffect, useRef } from "react";
-import { existsFile, isFolder, type FileTree } from "utils/filetree";
+import { existsFile, type FileTree, isFolder } from "utils/filetree";
 import { ChatInput } from "./ChatInput";
 import { ChatMessage } from "./ChatMessage";
 import { useTemplateAgent } from "./useTemplateAgent";
