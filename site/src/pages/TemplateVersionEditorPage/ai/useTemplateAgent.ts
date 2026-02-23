@@ -253,30 +253,30 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 const collectPendingApprovals = (
 	uiMessages: UIMessage[],
 ): PendingToolCall[] => {
-	const lastAssistantMessage = [...uiMessages]
-		.reverse()
-		.find((message) => message.role === "assistant");
-	if (!lastAssistantMessage) {
-		return [];
-	}
-
 	const pending: PendingToolCall[] = [];
-	for (const part of lastAssistantMessage.parts) {
-		if (!isToolUIPart(part) || part.state !== "approval-requested") {
+
+	for (const message of uiMessages) {
+		if (message.role !== "assistant") {
 			continue;
 		}
 
-		const toolName = getToolName(part);
-		if (toolName !== "editFile" && toolName !== "deleteFile") {
-			continue;
-		}
+		for (const part of message.parts) {
+			if (!isToolUIPart(part) || part.state !== "approval-requested") {
+				continue;
+			}
 
-		pending.push({
-			approvalId: part.approval.id,
-			toolCallId: part.toolCallId,
-			toolName,
-			args: toToolArgs(part.input),
-		});
+			const toolName = getToolName(part);
+			if (toolName !== "editFile" && toolName !== "deleteFile") {
+				continue;
+			}
+
+			pending.push({
+				approvalId: part.approval.id,
+				toolCallId: part.toolCallId,
+				toolName,
+				args: toToolArgs(part.input),
+			});
+		}
 	}
 
 	return pending;
@@ -290,11 +290,12 @@ const applyApprovalResponse = (
 ): { nextMessages: UIMessage[]; updated: boolean } => {
 	let updated = false;
 
-	const nextMessages = messages.map((message, index) => {
-		if (index !== messages.length - 1 || message.role !== "assistant") {
+	const nextMessages = messages.map((message) => {
+		if (message.role !== "assistant") {
 			return message;
 		}
 
+		let messageUpdated = false;
 		const nextParts = message.parts.map((part) => {
 			if (!isToolUIPart(part)) {
 				return part;
@@ -313,14 +314,19 @@ const applyApprovalResponse = (
 			}
 
 			updated = true;
+			messageUpdated = true;
+
+			const approval = reason
+				? { id: pending.approvalId, approved, reason }
+				: { id: pending.approvalId, approved };
 			return {
 				...part,
 				state: "approval-responded",
-				approval: { id: pending.approvalId, approved, reason },
-			} as unknown as typeof part;
+				approval,
+			} as UIMessage["parts"][number];
 		});
 
-		return updated ? { ...message, parts: nextParts } : message;
+		return messageUpdated ? { ...message, parts: nextParts } : message;
 	});
 
 	return { nextMessages, updated };
@@ -389,7 +395,11 @@ export const useTemplateAgent = ({
 			const initialAssistantMessage =
 				lastMessage?.role === "assistant"
 					? cloneMessage(lastMessage)
-					: undefined;
+					: {
+							id: `assistant-${++messageCounter.current}`,
+							role: "assistant" as const,
+							parts: [],
+						};
 
 			try {
 				for await (const message of readUIMessageStream({
@@ -432,11 +442,18 @@ export const useTemplateAgent = ({
 
 	const send = useCallback(
 		(text: string) => {
-			if (status === "streaming" || status === "awaiting_approval") {
+			if (status === "streaming") {
+				return;
+			}
+			// Don't allow new messages while approvals are pending.
+			if (status === "awaiting_approval") {
 				return;
 			}
 			if (abortRef.current) {
 				return;
+			}
+			if (status === "error") {
+				setStatus("idle");
 			}
 
 			const trimmed = text.trim();
