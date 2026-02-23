@@ -37,8 +37,6 @@ const ANTHROPIC_EFFORT_OPTIONS: readonly AnthropicEffort[] = [
 ];
 
 const CURATED_MODEL_PATTERNS: readonly string[] = [
-	// OpenAI — latest reasoning models.
-	"o4",
 	// Anthropic — flagship models.
 	"claude-opus-4-6",
 	"claude-sonnet-4-6",
