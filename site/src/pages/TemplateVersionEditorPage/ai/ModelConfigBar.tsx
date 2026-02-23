@@ -15,7 +15,7 @@ import {
 	SelectValue,
 } from "components/Select/Select";
 import { SingleThumbSlider } from "components/Slider/SingleThumbSlider";
-import type { FC } from "react";
+import { useState, type FC } from "react";
 
 const DEFAULT_REASONING_EFFORT: OpenAIReasoningEffort = "medium";
 const DEFAULT_THINKING_BUDGET_TOKENS = 10_240;
@@ -34,6 +34,18 @@ const ANTHROPIC_EFFORT_OPTIONS: readonly AnthropicEffort[] = [
 	"medium",
 	"high",
 	"max",
+];
+
+const CURATED_MODEL_PATTERNS: readonly string[] = [
+	// OpenAI — latest GPT and reasoning models.
+	"gpt-4.1",
+	"gpt-4o",
+	"o3",
+	"o4",
+	// Anthropic — flagship models.
+	"claude-opus-4",
+	"claude-sonnet-4-6",
+	"claude-haiku-4-5",
 ];
 
 type ThinkingModeValue = "disabled" | "adaptive" | "budget";
@@ -148,6 +160,13 @@ export const isAnthropicThinkingModel = (modelID: string): boolean => {
 	);
 };
 
+const isCuratedModel = (modelId: string): boolean => {
+	const normalized = modelId.toLowerCase();
+	return CURATED_MODEL_PATTERNS.some((pattern) =>
+		normalized.startsWith(pattern),
+	);
+};
+
 interface ModelConfigBarProps {
 	modelConfig: AIModelConfig;
 	availableModels: readonly AIBridgeModel[];
@@ -160,6 +179,22 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 	onModelConfigChange,
 }) => {
 	const selectedModel = modelConfig.model;
+	const [showAllModels, setShowAllModels] = useState(false);
+	const selectedModelKey = toModelKey(selectedModel);
+	const displayModels = [...availableModels]
+		.filter(
+			(model) =>
+				showAllModels ||
+				isCuratedModel(model.id) ||
+				toModelKey(model) === selectedModelKey,
+		)
+		.sort((a, b) => a.id.localeCompare(b.id));
+	const openAIModels = displayModels.filter(
+		(model) => model.provider === "openai",
+	);
+	const anthropicModels = displayModels.filter(
+		(model) => model.provider === "anthropic",
+	);
 	const showOpenAIReasoning =
 		selectedModel.provider === "openai" &&
 		isOpenAIReasoningModel(selectedModel.id);
@@ -263,41 +298,41 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 		<div className="border-solid border-b border-border-default px-3 py-1.5">
 			<div className="flex flex-wrap items-end gap-2">
 				<div className="min-w-[180px] flex-1">
-					<div className="mb-0.5 text-2xs text-content-secondary">Model</div>
-					<Select
-						value={toModelKey(selectedModel)}
-						onValueChange={handleModelChange}
-					>
+					<div className="mb-0.5 flex items-center justify-between text-2xs text-content-secondary">
+						<span>Model</span>
+						<button
+							type="button"
+							className="text-2xs text-content-link hover:underline cursor-pointer"
+							onClick={() => setShowAllModels((prev) => !prev)}
+						>
+							{showAllModels ? "Fewer models" : "All models"}
+						</button>
+					</div>
+					<Select value={selectedModelKey} onValueChange={handleModelChange}>
 						<SelectTrigger className="h-8 text-xs">
 							<SelectValue placeholder="Select a model" />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectGroup>
-								<SelectLabel>OpenAI</SelectLabel>
-								{availableModels
-									.filter((model) => model.provider === "openai")
-									.map((model) => (
-										<SelectItem
-											key={toModelKey(model)}
-											value={toModelKey(model)}
-										>
+							{openAIModels.length > 0 && (
+								<SelectGroup>
+									<SelectLabel>OpenAI</SelectLabel>
+									{openAIModels.map((model) => (
+										<SelectItem key={toModelKey(model)} value={toModelKey(model)}>
 											{model.id}
 										</SelectItem>
 									))}
-							</SelectGroup>
-							<SelectGroup>
-								<SelectLabel>Anthropic</SelectLabel>
-								{availableModels
-									.filter((model) => model.provider === "anthropic")
-									.map((model) => (
-										<SelectItem
-											key={toModelKey(model)}
-											value={toModelKey(model)}
-										>
+								</SelectGroup>
+							)}
+							{anthropicModels.length > 0 && (
+								<SelectGroup>
+									<SelectLabel>Anthropic</SelectLabel>
+									{anthropicModels.map((model) => (
+										<SelectItem key={toModelKey(model)} value={toModelKey(model)}>
 											{model.id}
 										</SelectItem>
 									))}
-							</SelectGroup>
+								</SelectGroup>
+							)}
 						</SelectContent>
 					</Select>
 				</div>
