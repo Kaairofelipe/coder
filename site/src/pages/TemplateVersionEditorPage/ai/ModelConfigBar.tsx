@@ -1,6 +1,7 @@
 import type {
 	AIBridgeModel,
 	AIModelConfig,
+	AnthropicEffort,
 	AnthropicThinking,
 	OpenAIReasoningEffort,
 } from "api/queries/aiBridge";
@@ -26,6 +27,13 @@ const OPENAI_REASONING_OPTIONS: readonly OpenAIReasoningEffort[] = [
 	"low",
 	"medium",
 	"high",
+];
+
+const ANTHROPIC_EFFORT_OPTIONS: readonly AnthropicEffort[] = [
+	"low",
+	"medium",
+	"high",
+	"max",
 ];
 
 type ThinkingModeValue = "disabled" | "adaptive" | "budget";
@@ -86,7 +94,13 @@ const getDefaultModelConfig = (model: AIBridgeModel): AIModelConfig => {
 	if (model.provider === "openai" && isOpenAIReasoningModel(model.id)) {
 		config.reasoningEffort = DEFAULT_REASONING_EFFORT;
 	}
-	if (model.provider === "anthropic" && isAnthropicThinkingModel(model.id)) {
+	if (model.provider === "anthropic" && isAnthropicEffortModel(model.id)) {
+		config.thinking = { type: "adaptive" };
+		config.anthropicEffort = "medium";
+	} else if (
+		model.provider === "anthropic" &&
+		isAnthropicBudgetThinkingModel(model.id)
+	) {
 		config.thinking = { type: "adaptive" };
 	}
 
@@ -103,13 +117,34 @@ export const isOpenAIReasoningModel = (modelID: string): boolean => {
 	);
 };
 
-/** Returns true for Anthropic models that support extended thinking. */
-export const isAnthropicThinkingModel = (modelID: string): boolean => {
+/** Returns true for Anthropic 4.6 models that support effort+adaptive. */
+export const isAnthropicEffortModel = (modelID: string): boolean => {
 	const normalized = modelID.toLowerCase();
 	return (
-		normalized.includes("claude-3-7-sonnet") ||
-		normalized.includes("claude-sonnet-4") ||
-		normalized.includes("claude-opus-4")
+		normalized.includes("claude-sonnet-4-6") ||
+		normalized.includes("claude-opus-4-6")
+	);
+};
+
+/**
+ * Returns true for Anthropic models that support manual thinking budget
+ * controls via budget tokens.
+ */
+export const isAnthropicBudgetThinkingModel = (modelID: string): boolean => {
+	const normalized = modelID.toLowerCase();
+	return (
+		(normalized.includes("claude-3-7-sonnet") ||
+			normalized.includes("claude-sonnet-4") ||
+			normalized.includes("claude-opus-4")) &&
+		!isAnthropicEffortModel(normalized)
+	);
+};
+
+/** Returns true for Anthropic models that support extended thinking. */
+export const isAnthropicThinkingModel = (modelID: string): boolean => {
+	return (
+		isAnthropicEffortModel(modelID) ||
+		isAnthropicBudgetThinkingModel(modelID)
 	);
 };
 
@@ -131,14 +166,25 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 	const showAnthropicThinking =
 		selectedModel.provider === "anthropic" &&
 		isAnthropicThinkingModel(selectedModel.id);
+	const showAnthropicEffort =
+		selectedModel.provider === "anthropic" &&
+		isAnthropicEffortModel(selectedModel.id);
+	const showAnthropicBudgetThinking =
+		selectedModel.provider === "anthropic" &&
+		isAnthropicBudgetThinkingModel(selectedModel.id);
 
 	const reasoningEffort =
 		modelConfig.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
 	const thinkingMode = getThinkingMode(modelConfig.thinking);
+	const selectedThinkingMode: ThinkingModeValue =
+		showAnthropicEffort && thinkingMode === "budget"
+			? "adaptive"
+			: thinkingMode;
 	const thinkingBudgetTokens =
 		modelConfig.thinking?.type === "enabled"
 			? clampThinkingBudgetTokens(modelConfig.thinking.budgetTokens)
 			: DEFAULT_THINKING_BUDGET_TOKENS;
+	const anthropicEffort = modelConfig.anthropicEffort ?? "medium";
 
 	const handleModelChange = (nextModelKey: string) => {
 		const parsedModel = parseModelKey(nextModelKey);
@@ -183,6 +229,11 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 				});
 				return;
 			case "budget":
+				if (!showAnthropicBudgetThinking) {
+					throw new Error(
+						"Thinking budget is only supported for Anthropic budget-thinking models.",
+					);
+				}
 				onModelConfigChange({
 					...modelConfig,
 					thinking: {
@@ -196,6 +247,16 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 					`Unknown Anthropic thinking mode "${nextThinkingMode}".`,
 				);
 		}
+	};
+
+	const handleEffortChange = (nextEffort: string) => {
+		if (!ANTHROPIC_EFFORT_OPTIONS.includes(nextEffort as AnthropicEffort)) {
+			throw new Error(`Unknown Anthropic effort "${nextEffort}".`);
+		}
+		onModelConfigChange({
+			...modelConfig,
+			anthropicEffort: nextEffort as AnthropicEffort,
+		});
 	};
 
 	return (
@@ -269,7 +330,7 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 								Thinking
 							</div>
 							<Select
-								value={thinkingMode}
+								value={selectedThinkingMode}
 								onValueChange={handleThinkingModeChange}
 							>
 								<SelectTrigger className="h-9">
@@ -278,11 +339,13 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 								<SelectContent>
 									<SelectItem value="disabled">Disabled</SelectItem>
 									<SelectItem value="adaptive">Adaptive</SelectItem>
-									<SelectItem value="budget">Budget</SelectItem>
+									{showAnthropicBudgetThinking && (
+											<SelectItem value="budget">Budget</SelectItem>
+										)}
 								</SelectContent>
 							</Select>
 						</div>
-						{thinkingMode === "budget" && (
+						{showAnthropicBudgetThinking && selectedThinkingMode === "budget" && (
 							<div className="min-w-[240px] flex-1">
 								<div className="mb-1 flex items-center justify-between text-xs text-content-secondary">
 									<span>Thinking budget</span>
@@ -313,6 +376,23 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 							</div>
 						)}
 					</>
+				)}
+				{showAnthropicEffort && (
+					<div className="w-[140px]">
+						<div className="mb-1 text-xs text-content-secondary">Effort</div>
+						<Select value={anthropicEffort} onValueChange={handleEffortChange}>
+							<SelectTrigger className="h-9">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{ANTHROPIC_EFFORT_OPTIONS.map((option) => (
+									<SelectItem key={option} value={option}>
+										{option}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
 				)}
 			</div>
 		</div>

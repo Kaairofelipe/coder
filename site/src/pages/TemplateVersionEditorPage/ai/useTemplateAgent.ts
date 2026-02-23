@@ -110,6 +110,9 @@ const createTemplateAgent = (
 	if (modelConfig.model.provider === "anthropic" && modelConfig.thinking) {
 		providerOptions.anthropic = {
 			thinking: modelConfig.thinking,
+			...(modelConfig.anthropicEffort !== undefined && {
+				effort: modelConfig.anthropicEffort,
+			}),
 		};
 	}
 

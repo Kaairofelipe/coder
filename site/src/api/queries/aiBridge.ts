@@ -18,10 +18,13 @@ export type AnthropicThinking =
 	| { type: "adaptive" }
 	| { type: "enabled"; budgetTokens: number };
 
+export type AnthropicEffort = "low" | "medium" | "high" | "max";
+
 export interface AIModelConfig {
 	model: AIBridgeModel;
 	reasoningEffort?: OpenAIReasoningEffort;
 	thinking?: AnthropicThinking;
+	anthropicEffort?: AnthropicEffort;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
