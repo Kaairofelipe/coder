@@ -226,12 +226,14 @@ const mapToolStateToDisplay = (
 };
 
 const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
-	return uiMessages
-		.filter(
-			(message): message is UIMessage & { role: "user" | "assistant" } =>
-				message.role === "user" || message.role === "assistant",
-		)
-		.map((message) => {
+	const result: DisplayMessage[] = [];
+
+	for (const message of uiMessages) {
+		if (message.role !== "user" && message.role !== "assistant") {
+			continue;
+		}
+
+		if (message.role === "user") {
 			const content = message.parts
 				.filter(
 					(part): part is { type: "text"; text: string } =>
@@ -239,18 +241,63 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 				)
 				.map((part) => part.text)
 				.join("");
-
-			const toolCalls = message.parts
-				.filter(isToolUIPart)
-				.map(mapToolStateToDisplay);
-
-			return {
+			result.push({
 				id: message.id,
-				role: message.role,
+				role: "user",
 				content,
-				toolCalls,
-			};
-		});
+				toolCalls: [],
+			});
+			continue;
+		}
+
+		// Split assistant messages into chronological segments.
+		// A new segment starts when a text part follows a tool
+		// part, preserving the natural conversation flow:
+		// text → tool calls → text → tool calls.
+		let segmentIndex = 0;
+		let currentText = "";
+		let currentToolCalls: DisplayToolCall[] = [];
+		let lastPartWasTool = false;
+
+		for (const part of message.parts) {
+			if (part.type === "text") {
+				// Flush the current segment when text follows
+				// tool calls — this starts a new visual block.
+				if (lastPartWasTool && currentToolCalls.length > 0) {
+					result.push({
+						id: `${message.id}-${segmentIndex++}`,
+						role: "assistant",
+						content: currentText,
+						toolCalls: currentToolCalls,
+					});
+					currentText = "";
+					currentToolCalls = [];
+				}
+				currentText += part.text;
+				lastPartWasTool = false;
+			} else if (isToolUIPart(part)) {
+				currentToolCalls.push(mapToolStateToDisplay(part));
+				lastPartWasTool = true;
+			}
+		}
+
+		// Flush the final segment. Use the original message ID
+		// when only one segment was produced so that approval
+		// lookups still match by ID.
+		if (currentText.length > 0 || currentToolCalls.length > 0) {
+			result.push({
+				id:
+					segmentIndex > 0
+						? `${message.id}-${segmentIndex}`
+						: message.id,
+				role: "assistant",
+				content: currentText,
+				toolCalls: currentToolCalls,
+			});
+		}
+	}
+
+	return result;
 };
 
 const collectPendingApprovals = (
