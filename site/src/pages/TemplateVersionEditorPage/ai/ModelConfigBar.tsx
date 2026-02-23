@@ -37,13 +37,10 @@ const ANTHROPIC_EFFORT_OPTIONS: readonly AnthropicEffort[] = [
 ];
 
 const CURATED_MODEL_PATTERNS: readonly string[] = [
-	// OpenAI — latest GPT and reasoning models.
-	"gpt-4.1",
-	"gpt-4o",
-	"o3",
+	// OpenAI — latest reasoning models.
 	"o4",
 	// Anthropic — flagship models.
-	"claude-opus-4",
+	"claude-opus-4-6",
 	"claude-sonnet-4-6",
 	"claude-haiku-4-5",
 ];
@@ -160,7 +157,19 @@ export const isAnthropicThinkingModel = (modelID: string): boolean => {
 	);
 };
 
+/**
+ * Returns true for GPT-5 models at version 5.2 or higher. Uses regex
+ * parsing rather than prefix matching so future minor versions (5.3,
+ * 5.4, …) are automatically included.
+ */
+const isGpt52OrHigher = (modelId: string): boolean => {
+	const match = modelId.toLowerCase().match(/^gpt-5\.(\d+)/);
+	if (!match) return false;
+	return Number.parseInt(match[1], 10) >= 2;
+};
+
 const isCuratedModel = (modelId: string): boolean => {
+	if (isGpt52OrHigher(modelId)) return true;
 	const normalized = modelId.toLowerCase();
 	return CURATED_MODEL_PATTERNS.some((pattern) =>
 		normalized.startsWith(pattern),
