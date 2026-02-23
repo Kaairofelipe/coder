@@ -108,7 +108,8 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 				</div>
 			</div>
 
-			<div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3">
+			<div ref={listRef} className="flex-1 overflow-y-auto p-3">
+				<div className="flex min-h-full flex-col justify-end gap-3">
 				{messages.length === 0 && (
 					<div className="rounded-md border border-dashed border-border-default bg-surface-secondary/20 p-3 text-sm text-content-secondary">
 						Ask me to inspect or modify your template files. I can read files,
@@ -126,6 +127,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 						onNavigateToFile={navigateToExistingFile}
 					/>
 				))}
+				</div>
 			</div>
 
 			{isStreaming && (
