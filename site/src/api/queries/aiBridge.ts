@@ -37,7 +37,14 @@ const fetchProviderModels = async (
 	path: string,
 	provider: AIBridgeProvider,
 ): Promise<AIBridgeModel[]> => {
+	const headers: Record<string, string> = {};
+	if (provider === "anthropic") {
+		// The Anthropic API requires this header on every request,
+		// including model discovery.
+		headers["anthropic-version"] = "2023-06-01";
+	}
 	const response = await API.getAxiosInstance().get(path, {
+		headers,
 		validateStatus: () => true,
 	});
 	if (response.status < 200 || response.status >= 300) {

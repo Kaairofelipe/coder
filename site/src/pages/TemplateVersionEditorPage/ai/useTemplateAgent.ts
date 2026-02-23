@@ -34,12 +34,26 @@ function getRuntimeCsrfToken(): string {
 
 const openAIProvider = createOpenAI({
 	baseURL: "/api/v2/aibridge/openai/v1",
-	headers: { "X-CSRF-TOKEN": getRuntimeCsrfToken() },
+	apiKey: "coder",
+	headers: {
+		"X-CSRF-TOKEN": getRuntimeCsrfToken(),
+		// Override the SDK's Authorization header so the AI bridge
+		// authenticates via the browser's session cookie instead of
+		// this placeholder key.
+		Authorization: "",
+	},
 });
 
 const anthropicProvider = createAnthropic({
 	baseURL: "/api/v2/aibridge/anthropic/v1",
-	headers: { "X-CSRF-TOKEN": getRuntimeCsrfToken() },
+	apiKey: "coder",
+	headers: {
+		"X-CSRF-TOKEN": getRuntimeCsrfToken(),
+		// Override the SDK's x-api-key header so the AI bridge
+		// authenticates via the browser's session cookie instead of
+		// this placeholder key.
+		"x-api-key": "",
+	},
 });
 
 const anthropicModelPrefix = "anthropic/";
