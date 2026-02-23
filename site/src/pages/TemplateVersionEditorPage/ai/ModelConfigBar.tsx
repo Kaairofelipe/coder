@@ -166,7 +166,7 @@ const isGpt52OrHigher = (modelId: string): boolean => {
 	return Number.parseInt(match[1], 10) >= 2;
 };
 
-const isCuratedModel = (modelId: string): boolean => {
+export const isCuratedModel = (modelId: string): boolean => {
 	if (isGpt52OrHigher(modelId)) return true;
 	const normalized = modelId.toLowerCase();
 	return CURATED_MODEL_PATTERNS.some((pattern) =>

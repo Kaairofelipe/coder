@@ -74,6 +74,7 @@ import {
 	updateFile,
 } from "utils/filetree";
 import { AIChatPanel } from "./ai/AIChatPanel";
+import { isCuratedModel } from "./ai/ModelConfigBar";
 import {
 	CreateFileDialog,
 	DeleteFileDialog,
@@ -119,12 +120,16 @@ const isLikelyChatModel = (model: AIBridgeModel): boolean => {
 	);
 };
 
-// Prefer model IDs that look chat-capable, but fall back to the first
-// discovered model so deployments with custom model naming can still use
-// the assistant.
+// Prefer a curated model, then any chat-capable model, then fall
+// back to the first discovered model so deployments with custom
+// model naming can still use the assistant.
 const selectDefaultAIModel = (
 	models: readonly AIBridgeModel[],
 ): AIBridgeModel | undefined => {
+	const curatedModel = models.find((m) => isCuratedModel(m.id));
+	if (curatedModel) {
+		return curatedModel;
+	}
 	const likelyChatModel = models.find(isLikelyChatModel);
 	if (likelyChatModel) {
 		return likelyChatModel;
