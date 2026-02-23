@@ -37,7 +37,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	logger := s.logger.With(slog.F("path", r.URL.Path))
 
-	key := strings.TrimSpace(agplaibridge.ExtractAuthToken(r.Header))
+	key := strings.TrimSpace(agplaibridge.ExtractAuthToken(r))
 	if key == "" {
 		logger.Warn(ctx, "no auth key provided")
 		http.Error(rw, ErrNoAuthKey.Error(), http.StatusBadRequest)

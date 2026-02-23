@@ -92,7 +92,7 @@ func TestServeHTTP_FailureModes(t *testing.T) {
 		{
 			name: "unrecognized header",
 			reqHeaders: map[string]string{
-				codersdk.SessionTokenHeader: "key", // Coder-Session-Token is not supported; requests originate with AI clients, not coder CLI.
+				"X-Unrecognized-Header": "key", // Unrecognized headers should be ignored for auth extraction.
 			},
 			applyMocksFn:   func(client *mock.MockDRPCClient, _ *mock.MockPooler) {},
 			expectedErr:    aibridged.ErrNoAuthKey,
@@ -220,6 +220,7 @@ func TestExtractAuthToken(t *testing.T) {
 	cases := []struct {
 		name        string
 		headers     map[string]string
+		cookies     []*http.Cookie
 		expectedKey string
 	}{
 		{
@@ -285,17 +286,64 @@ func TestExtractAuthToken(t *testing.T) {
 			headers:     map[string]string{"X-Api-Key": "key"},
 			expectedKey: "key",
 		},
+		{
+			name:    "coder-session-token-header/empty",
+			headers: map[string]string{codersdk.SessionTokenHeader: ""},
+		},
+		{
+			name:        "coder-session-token-header/ok",
+			headers:     map[string]string{codersdk.SessionTokenHeader: "session-key"},
+			expectedKey: "session-key",
+		},
+		{
+			name: "coder-session-token-header/priority over cookie",
+			headers: map[string]string{
+				codersdk.SessionTokenHeader: "session-key",
+			},
+			cookies: []*http.Cookie{{
+				Name:  codersdk.SessionTokenCookie,
+				Value: "cookie-key",
+			}},
+			expectedKey: "session-key",
+		},
+		{
+			name: "session-cookie/empty",
+			cookies: []*http.Cookie{{
+				Name:  codersdk.SessionTokenCookie,
+				Value: "",
+			}},
+		},
+		{
+			name: "session-cookie/ok",
+			cookies: []*http.Cookie{{
+				Name:  codersdk.SessionTokenCookie,
+				Value: "cookie-key",
+			}},
+			expectedKey: "cookie-key",
+		},
+		{
+			name: "x-api-key/priority over session-header",
+			headers: map[string]string{
+				"X-Api-Key":                 "api-key",
+				codersdk.SessionTokenHeader: "session-key",
+			},
+			expectedKey: "api-key",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			headers := make(http.Header, len(tc.headers))
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
 			for k, v := range tc.headers {
-				headers.Add(k, v)
+				r.Header.Add(k, v)
 			}
-			key := agplaibridge.ExtractAuthToken(headers)
+			for _, c := range tc.cookies {
+				r.AddCookie(c)
+			}
+
+			key := agplaibridge.ExtractAuthToken(r)
 			require.Equal(t, tc.expectedKey, key)
 		})
 	}
