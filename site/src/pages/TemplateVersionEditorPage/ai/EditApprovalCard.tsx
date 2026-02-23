@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { type FC, useMemo } from "react";
 import { cn } from "utils/cn";
+import { existsFile, type FileTree, getFileText, isFolder } from "utils/filetree";
 import type { DisplayToolCall } from "./useTemplateAgent";
 
 interface EditApprovalCardProps {
@@ -16,6 +17,7 @@ interface EditApprovalCardProps {
 	onApprove: () => void;
 	onReject: () => void;
 	onNavigateToFile?: (path: string) => void;
+	getFileTree: () => FileTree;
 }
 
 type DiffLine = {
@@ -31,24 +33,51 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const splitLines = (content: string) => content.split("\n");
 
 /**
+ * Find the 1-based line number where oldContent starts in the full file.
+ * Returns 1 if the snippet cannot be located.
+ */
+const findStartLine = (fullContent: string, oldContent: string): number => {
+	if (oldContent.length === 0 || fullContent.length === 0) {
+		return 1;
+	}
+	const index = fullContent.indexOf(oldContent);
+	if (index === -1) {
+		return 1;
+	}
+
+	// Count newlines before the match to get the 1-based line number.
+	let lineNumber = 1;
+	for (let i = 0; i < index; i++) {
+		if (fullContent[i] === "\n") {
+			lineNumber++;
+		}
+	}
+	return lineNumber;
+};
+
+/**
  * Compute a line-level diff between oldContent and newContent
  * using a simple LCS-based algorithm. Returns lines annotated
  * as "unchanged", "removed", or "added".
  */
-const buildDiffLines = (oldContent: string, newContent: string): DiffLine[] => {
+const buildDiffLines = (
+	oldContent: string,
+	newContent: string,
+	startLine: number,
+): DiffLine[] => {
 	if (oldContent.length === 0) {
 		return splitLines(newContent).map((text, i) => ({
 			type: "added",
 			text,
 			oldLineNo: undefined,
-			newLineNo: i + 1,
+			newLineNo: startLine + i,
 		}));
 	}
 	if (newContent.length === 0) {
 		return splitLines(oldContent).map((text, i) => ({
 			type: "removed",
 			text,
-			oldLineNo: i + 1,
+			oldLineNo: startLine + i,
 			newLineNo: undefined,
 		}));
 	}
@@ -106,8 +135,8 @@ const buildDiffLines = (oldContent: string, newContent: string): DiffLine[] => {
 
 	result.reverse();
 
-	let oldLineNo = 1;
-	let newLineNo = 1;
+	let oldLineNo = startLine;
+	let newLineNo = startLine;
 	for (const line of result) {
 		if (line.type === "unchanged") {
 			line.oldLineNo = oldLineNo;
@@ -132,6 +161,7 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 	onApprove,
 	onReject,
 	onNavigateToFile,
+	getFileTree,
 }) => {
 	const path = typeof toolCall.args.path === "string" ? toolCall.args.path : "";
 	const hasValidPath = path.length > 0;
@@ -146,12 +176,28 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 			? toolCall.args.newContent
 			: "";
 
+	const startLine = useMemo(() => {
+		if (!hasValidPath || toolCall.toolName !== "editFile") {
+			return 1;
+		}
+		try {
+			const tree = getFileTree();
+			if (!existsFile(path, tree) || isFolder(path, tree)) {
+				return 1;
+			}
+			const fullContent = getFileText(path, tree);
+			return findStartLine(fullContent, oldContent);
+		} catch {
+			return 1;
+		}
+	}, [getFileTree, hasValidPath, oldContent, path, toolCall.toolName]);
+
 	const diffLines = useMemo(() => {
 		if (toolCall.toolName !== "editFile") {
 			return [];
 		}
-		return buildDiffLines(oldContent, newContent);
-	}, [newContent, oldContent, toolCall.toolName]);
+		return buildDiffLines(oldContent, newContent, startLine);
+	}, [newContent, oldContent, startLine, toolCall.toolName]);
 
 	const result = isRecord(toolCall.result) ? toolCall.result : null;
 	const resultError = typeof result?.error === "string" ? result.error : null;

@@ -133,6 +133,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 						onApprove={approve}
 						onReject={reject}
 						onNavigateToFile={navigateToExistingFile}
+						getFileTree={getFileTree}
 					/>
 				))}
 				</div>

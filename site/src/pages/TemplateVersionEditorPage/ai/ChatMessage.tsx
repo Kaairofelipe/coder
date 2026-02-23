@@ -1,6 +1,7 @@
 import { SparklesIcon, UserIcon } from "lucide-react";
 import type { FC } from "react";
 import { cn } from "utils/cn";
+import type { FileTree } from "utils/filetree";
 import { EditApprovalCard } from "./EditApprovalCard";
 import { ToolCallCard } from "./ToolCallCard";
 import type { PendingToolCall } from "./types";
@@ -12,6 +13,7 @@ interface ChatMessageProps {
 	onApprove: () => void;
 	onReject: () => void;
 	onNavigateToFile?: (path: string) => void;
+	getFileTree: () => FileTree;
 }
 
 export const ChatMessage: FC<ChatMessageProps> = ({
@@ -20,6 +22,7 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 	onApprove,
 	onReject,
 	onNavigateToFile,
+	getFileTree,
 }) => {
 	if (message.role === "user") {
 		return (
@@ -67,6 +70,7 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 								onApprove={onApprove}
 								onReject={onReject}
 								onNavigateToFile={onNavigateToFile}
+								getFileTree={getFileTree}
 							/>
 						);
 					}
