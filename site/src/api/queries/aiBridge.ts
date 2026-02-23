@@ -11,6 +11,19 @@ export interface AIBridgeModel {
 	provider: AIBridgeProvider;
 }
 
+export type OpenAIReasoningEffort = "low" | "medium" | "high";
+
+export type AnthropicThinking =
+	| { type: "disabled" }
+	| { type: "adaptive" }
+	| { type: "enabled"; budgetTokens: number };
+
+export interface AIModelConfig {
+	model: AIBridgeModel;
+	reasoningEffort?: OpenAIReasoningEffort;
+	thinking?: AnthropicThinking;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null;
 

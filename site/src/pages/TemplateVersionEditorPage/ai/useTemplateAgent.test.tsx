@@ -125,8 +125,12 @@ const renderTemplateAgentHook = () => {
 		useTemplateAgent({
 			getFileTree,
 			setFileTree,
-			modelId: "gpt-4o-mini",
-			modelProvider: "openai",
+			modelConfig: {
+				model: {
+					id: "gpt-4o-mini",
+					provider: "openai",
+				},
+			},
 		}),
 	);
 };

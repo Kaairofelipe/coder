@@ -10,7 +10,7 @@ import {
 	type UIMessage,
 } from "ai";
 import { API } from "api/api";
-import type { AIBridgeProvider } from "api/queries/aiBridge";
+import type { AIBridgeProvider, AIModelConfig } from "api/queries/aiBridge";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
 import { createTemplateAgentTools } from "./tools";
@@ -90,29 +90,48 @@ Rules:
 - Explain what you're changing and why before making edits.`;
 
 const createTemplateAgent = (
-	modelId: string,
-	modelProvider: AIBridgeProvider,
+	modelConfig: AIModelConfig,
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
 	onFileEdited?: (path: string) => void,
 	onFileDeleted?: (path: string) => void,
 ) => {
+	const providerOptions: NonNullable<
+		ConstructorParameters<typeof ToolLoopAgent>[0]["providerOptions"]
+	> = {};
+	if (
+		modelConfig.model.provider === "openai" &&
+		modelConfig.reasoningEffort !== undefined
+	) {
+		providerOptions.openai = {
+			reasoningEffort: modelConfig.reasoningEffort,
+		};
+	}
+	if (modelConfig.model.provider === "anthropic" && modelConfig.thinking) {
+		providerOptions.anthropic = {
+			thinking: modelConfig.thinking,
+		};
+	}
+
 	return new ToolLoopAgent({
-		model: resolveProviderModel(modelProvider, modelId),
+		model: resolveProviderModel(
+			modelConfig.model.provider,
+			modelConfig.model.id,
+		),
 		instructions: SYSTEM_PROMPT,
 		tools: createTemplateAgentTools(getFileTree, setFileTree, {
 			onFileEdited,
 			onFileDeleted,
 		}),
 		stopWhen: stepCountIs(MAX_STEPS),
+		providerOptions,
 	});
 };
 
 interface UseTemplateAgentOptions {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
-	modelId: string;
-	modelProvider: AIBridgeProvider;
+	modelConfig: AIModelConfig;
 	/** Called after a file is created or edited so the editor can navigate to it. */
 	onFileEdited?: (path: string) => void;
 	/** Called after a file is deleted so the editor can clear the active path if needed. */
@@ -310,8 +329,7 @@ const applyApprovalResponse = (
 export const useTemplateAgent = ({
 	getFileTree,
 	setFileTree,
-	modelId,
-	modelProvider,
+	modelConfig,
 	onFileEdited,
 	onFileDeleted,
 }: UseTemplateAgentOptions) => {
@@ -343,8 +361,7 @@ export const useTemplateAgent = ({
 			};
 
 			const agent = createTemplateAgent(
-				modelId,
-				modelProvider,
+				modelConfig,
 				getFileTree,
 				setFileTree,
 				onFileEdited,
@@ -405,8 +422,7 @@ export const useTemplateAgent = ({
 		},
 		[
 			getFileTree,
-			modelId,
-			modelProvider,
+			modelConfig,
 			onFileDeleted,
 			onFileEdited,
 			setConversationMessages,

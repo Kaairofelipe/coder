@@ -1,6 +1,10 @@
 import IconButton from "@mui/material/IconButton";
 import { getErrorDetail, getErrorMessage } from "api/errors";
-import { type AIBridgeModel, aiBridgeModels } from "api/queries/aiBridge";
+import {
+	type AIBridgeModel,
+	type AIModelConfig,
+	aiBridgeModels,
+} from "api/queries/aiBridge";
 import { experiments } from "api/queries/experiments";
 import type {
 	ProvisionerJobLog,
@@ -201,8 +205,14 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		...aiBridgeModels(),
 		enabled: aiExperimentEnabled,
 	});
-	const aiModel = selectDefaultAIModel(aiModels);
-	const aiAvailable = aiExperimentEnabled && aiModel !== undefined;
+	const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig>();
+	const defaultAIModel = selectDefaultAIModel(aiModels);
+	useEffect(() => {
+		if (aiModelConfig === undefined && defaultAIModel !== undefined) {
+			setAIModelConfig({ model: defaultAIModel });
+		}
+	}, [aiModelConfig, defaultAIModel]);
+	const aiAvailable = aiExperimentEnabled && aiModelConfig !== undefined;
 
 	// Use a ref so that getFileTree always returns the latest
 	// tree, including eagerly applied mutations that haven't
@@ -675,7 +685,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 								</div>
 							</div>
 						</Panel>
-						{aiPanelOpen && aiModel && (
+						{aiPanelOpen && aiModelConfig && (
 							<>
 								<PanelResizeHandle>
 									<div className="h-full w-1 bg-border transition-colors hover:bg-content-link" />
@@ -689,8 +699,9 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 									<AIChatPanel
 										getFileTree={getFileTree}
 										setFileTree={setFileTreeAndDirty}
-										modelId={aiModel.id}
-										modelProvider={aiModel.provider}
+										modelConfig={aiModelConfig}
+										availableModels={aiModels}
+										onModelConfigChange={setAIModelConfig}
 										onNavigateToFile={onActivePathChange}
 										onFileDeleted={(path) => {
 											// Clear the active path if the deleted

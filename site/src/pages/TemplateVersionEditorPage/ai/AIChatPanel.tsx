@@ -1,17 +1,19 @@
-import type { AIBridgeProvider } from "api/queries/aiBridge";
+import type { AIBridgeModel, AIModelConfig } from "api/queries/aiBridge";
 import { Button } from "components/Button/Button";
 import { RotateCcwIcon, SparklesIcon, XIcon } from "lucide-react";
 import { type FC, useCallback, useEffect, useRef } from "react";
 import { existsFile, type FileTree, isFolder } from "utils/filetree";
 import { ChatInput } from "./ChatInput";
 import { ChatMessage } from "./ChatMessage";
+import { ModelConfigBar } from "./ModelConfigBar";
 import { useTemplateAgent } from "./useTemplateAgent";
 
 interface AIChatPanelProps {
 	getFileTree: () => FileTree;
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
-	modelId: string;
-	modelProvider: AIBridgeProvider;
+	modelConfig: AIModelConfig;
+	availableModels: readonly AIBridgeModel[];
+	onModelConfigChange: (config: AIModelConfig) => void;
 	onNavigateToFile?: (path: string) => void;
 	onFileDeleted?: (path: string) => void;
 	onClose: () => void;
@@ -20,8 +22,9 @@ interface AIChatPanelProps {
 export const AIChatPanel: FC<AIChatPanelProps> = ({
 	getFileTree,
 	setFileTree,
-	modelId,
-	modelProvider,
+	modelConfig,
+	availableModels,
+	onModelConfigChange,
 	onNavigateToFile,
 	onFileDeleted,
 	onClose,
@@ -53,8 +56,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 	} = useTemplateAgent({
 		getFileTree,
 		setFileTree,
-		modelId,
-		modelProvider,
+		modelConfig,
 		onFileEdited: navigateToExistingFile,
 		onFileDeleted,
 	});
@@ -107,6 +109,12 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 					</Button>
 				</div>
 			</div>
+
+			<ModelConfigBar
+				modelConfig={modelConfig}
+				availableModels={availableModels}
+				onModelConfigChange={onModelConfigChange}
+			/>
 
 			<div ref={listRef} className="flex-1 overflow-y-auto p-3">
 				<div className="flex min-h-full flex-col justify-end gap-3">
