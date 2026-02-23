@@ -114,10 +114,11 @@ const getDefaultModelConfig = (model: AIBridgeModel): AIModelConfig => {
 	return config;
 };
 
-/** Returns true for OpenAI o-series models that support reasoning effort. */
+/** Returns true for OpenAI models that support reasoning effort. */
 export const isOpenAIReasoningModel = (modelID: string): boolean => {
 	const normalized = modelID.toLowerCase();
 	return (
+		normalized.startsWith("gpt-5") ||
 		normalized.startsWith("o1") ||
 		normalized.startsWith("o3") ||
 		normalized.startsWith("o4")
