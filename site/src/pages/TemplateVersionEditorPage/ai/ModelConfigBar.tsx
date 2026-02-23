@@ -260,15 +260,15 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 	};
 
 	return (
-		<div className="border-solid border-b border-border-default px-3 py-2">
-			<div className="flex flex-wrap items-end gap-3">
-				<div className="min-w-[220px] flex-1">
-					<div className="mb-1 text-xs text-content-secondary">Model</div>
+		<div className="border-solid border-b border-border-default px-3 py-1.5">
+			<div className="flex flex-wrap items-end gap-2">
+				<div className="min-w-[180px] flex-1">
+					<div className="mb-0.5 text-2xs text-content-secondary">Model</div>
 					<Select
 						value={toModelKey(selectedModel)}
 						onValueChange={handleModelChange}
 					>
-						<SelectTrigger className="h-9">
+						<SelectTrigger className="h-8 text-xs">
 							<SelectValue placeholder="Select a model" />
 						</SelectTrigger>
 						<SelectContent>
@@ -303,13 +303,13 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 				</div>
 
 				{showOpenAIReasoning && (
-					<div className="w-[180px]">
-						<div className="mb-1 text-xs text-content-secondary">Reasoning</div>
+					<div className="w-[120px]">
+						<div className="mb-0.5 text-2xs text-content-secondary">Reasoning</div>
 						<Select
 							value={reasoningEffort}
 							onValueChange={handleReasoningEffortChange}
 						>
-							<SelectTrigger className="h-9">
+							<SelectTrigger className="h-8 text-xs">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -325,15 +325,15 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 
 				{showAnthropicThinking && (
 					<>
-						<div className="w-[200px]">
-							<div className="mb-1 text-xs text-content-secondary">
+						<div className="w-[130px]">
+							<div className="mb-0.5 text-2xs text-content-secondary">
 								Thinking
 							</div>
 							<Select
 								value={selectedThinkingMode}
 								onValueChange={handleThinkingModeChange}
 							>
-								<SelectTrigger className="h-9">
+								<SelectTrigger className="h-8 text-xs">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -346,8 +346,8 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 							</Select>
 						</div>
 						{showAnthropicBudgetThinking && selectedThinkingMode === "budget" && (
-							<div className="min-w-[240px] flex-1">
-								<div className="mb-1 flex items-center justify-between text-xs text-content-secondary">
+							<div className="min-w-[180px] flex-1">
+								<div className="mb-0.5 flex items-center justify-between text-2xs text-content-secondary">
 									<span>Thinking budget</span>
 									<span>{thinkingBudgetTokens.toLocaleString()} tokens</span>
 								</div>
@@ -378,10 +378,10 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 					</>
 				)}
 				{showAnthropicEffort && (
-					<div className="w-[140px]">
-						<div className="mb-1 text-xs text-content-secondary">Effort</div>
+					<div className="w-[100px]">
+						<div className="mb-0.5 text-2xs text-content-secondary">Effort</div>
 						<Select value={anthropicEffort} onValueChange={handleEffortChange}>
-							<SelectTrigger className="h-9">
+							<SelectTrigger className="h-8 text-xs">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>

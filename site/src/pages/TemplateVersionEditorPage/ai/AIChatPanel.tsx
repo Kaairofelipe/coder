@@ -116,10 +116,10 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 				onModelConfigChange={onModelConfigChange}
 			/>
 
-			<div ref={listRef} className="flex-1 overflow-y-auto p-3">
-				<div className="flex min-h-full flex-col justify-end gap-3">
+			<div ref={listRef} className="flex-1 overflow-y-auto px-3 py-2">
+				<div className="flex min-h-full flex-col justify-end gap-2">
 				{messages.length === 0 && (
-					<div className="rounded-md border border-dashed border-border-default bg-surface-secondary/20 p-3 text-sm text-content-secondary">
+					<div className="rounded-md border border-dashed border-border-default p-2 text-xs text-content-secondary">
 						Ask me to inspect or modify your template files. I can read files,
 						propose edits, and ask for approval before changing anything.
 					</div>

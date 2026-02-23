@@ -57,7 +57,7 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 		toolCall.toolName === "listFiles" ? FolderOpenIcon : FileTextIcon;
 
 	return (
-		<div className="rounded-md border border-solid border-border-default bg-surface-secondary/30">
+		<div className="rounded-md border border-solid border-border-default">
 			<button
 				type="button"
 				onClick={() => setExpanded((prev) => !prev)}

@@ -66,7 +66,7 @@ export const ChatInput: FC<ChatInputProps> = ({
 	}, [resizeTextarea]);
 
 	return (
-		<div className="flex items-end gap-2 border-solid border-t border-border-default p-3">
+		<div className="flex items-end gap-2 border-solid border-t border-border-default px-3 py-2">
 			<textarea
 				ref={textareaRef}
 				value={value}

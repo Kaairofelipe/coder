@@ -204,7 +204,7 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 	const resultSuccess = result?.success === true;
 
 	return (
-		<div className="space-y-3 rounded-md border border-solid border-border-default bg-surface-secondary/20 p-3">
+		<div className="space-y-2 rounded-md border border-solid border-border-default p-2">
 			<div className="flex items-center gap-2">
 				{toolCall.toolName === "editFile" ? (
 					<FilePenLineIcon className="size-4 text-content-secondary" />
@@ -237,7 +237,7 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 			)}
 
 			{toolCall.toolName === "editFile" ? (
-				<div className="max-h-56 overflow-y-auto rounded-md border border-solid border-border-default bg-surface-primary">
+				<div className="max-h-64 overflow-y-auto rounded-md border border-solid border-border-default">
 					{diffLines.length > 0 ? (
 						diffLines.map((line, index) => (
 							<div
@@ -301,7 +301,7 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 			)}
 
 			{toolCall.state === "result" && resultSuccess && (
-				<div className="rounded-md border border-solid border-border-success bg-surface-positive/20 p-2 text-xs text-content-positive">
+				<div className="rounded-md border border-solid border-success bg-surface-green/20 p-2 text-xs text-content-success">
 					{toolCall.toolName === "deleteFile"
 						? "File deleted successfully."
 						: "Edit applied successfully."}
