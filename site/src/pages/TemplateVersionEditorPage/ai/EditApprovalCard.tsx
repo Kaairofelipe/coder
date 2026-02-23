@@ -21,6 +21,8 @@ interface EditApprovalCardProps {
 type DiffLine = {
 	type: "added" | "removed" | "unchanged";
 	text: string;
+	oldLineNo: number | undefined;
+	newLineNo: number | undefined;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -35,10 +37,20 @@ const splitLines = (content: string) => content.split("\n");
  */
 const buildDiffLines = (oldContent: string, newContent: string): DiffLine[] => {
 	if (oldContent.length === 0) {
-		return splitLines(newContent).map((line) => ({ type: "added", text: line }));
+		return splitLines(newContent).map((text, i) => ({
+			type: "added",
+			text,
+			oldLineNo: undefined,
+			newLineNo: i + 1,
+		}));
 	}
 	if (newContent.length === 0) {
-		return splitLines(oldContent).map((line) => ({ type: "removed", text: line }));
+		return splitLines(oldContent).map((text, i) => ({
+			type: "removed",
+			text,
+			oldLineNo: i + 1,
+			newLineNo: undefined,
+		}));
 	}
 
 	const oldLines = splitLines(oldContent);
@@ -65,19 +77,53 @@ const buildDiffLines = (oldContent: string, newContent: string): DiffLine[] => {
 	let j = n;
 	while (i > 0 || j > 0) {
 		if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-			result.push({ type: "unchanged", text: oldLines[i - 1] });
+			result.push({
+				type: "unchanged",
+				text: oldLines[i - 1],
+				oldLineNo: undefined,
+				newLineNo: undefined,
+			});
 			i--;
 			j--;
 		} else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-			result.push({ type: "added", text: newLines[j - 1] });
+			result.push({
+				type: "added",
+				text: newLines[j - 1],
+				oldLineNo: undefined,
+				newLineNo: undefined,
+			});
 			j--;
 		} else {
-			result.push({ type: "removed", text: oldLines[i - 1] });
+			result.push({
+				type: "removed",
+				text: oldLines[i - 1],
+				oldLineNo: undefined,
+				newLineNo: undefined,
+			});
 			i--;
 		}
 	}
 
-	return result.reverse();
+	result.reverse();
+
+	let oldLineNo = 1;
+	let newLineNo = 1;
+	for (const line of result) {
+		if (line.type === "unchanged") {
+			line.oldLineNo = oldLineNo;
+			line.newLineNo = newLineNo;
+			oldLineNo++;
+			newLineNo++;
+		} else if (line.type === "removed") {
+			line.oldLineNo = oldLineNo;
+			oldLineNo++;
+		} else {
+			line.newLineNo = newLineNo;
+			newLineNo++;
+		}
+	}
+
+	return result;
 };
 
 export const EditApprovalCard: FC<EditApprovalCardProps> = ({
@@ -151,20 +197,30 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 							<div
 								key={`${line.type}-${index}`}
 								className={cn(
-									"font-mono text-[11px] leading-5 px-2",
+									"flex font-mono text-[11px] leading-5",
 									line.type === "added" &&
-										"bg-surface-positive/30 text-content-positive",
+										"bg-surface-green/20 text-content-success",
 									line.type === "removed" &&
-										"bg-surface-destructive/30 text-content-destructive",
+										"bg-surface-red/20 text-content-destructive",
 									line.type === "unchanged" && "text-content-secondary",
 								)}
 							>
-								{line.type === "added"
-									? "+"
-									: line.type === "removed"
-										? "−"
-										: " "}
-								{line.text}
+								<span className="inline-block w-8 shrink-0 select-none pr-1 text-right text-content-disabled">
+									{line.oldLineNo ?? ""}
+								</span>
+								<span className="inline-block w-8 shrink-0 select-none pr-1 text-right text-content-disabled">
+									{line.newLineNo ?? ""}
+								</span>
+								<span className="inline-block w-4 shrink-0 select-none text-center">
+									{line.type === "added"
+										? "+"
+										: line.type === "removed"
+											? "−"
+											: " "}
+								</span>
+								<span className="flex-1 whitespace-pre-wrap break-all pr-2">
+									{line.text}
+								</span>
 							</div>
 						))
 					) : (
