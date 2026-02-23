@@ -19,7 +19,7 @@ interface EditApprovalCardProps {
 }
 
 type DiffLine = {
-	type: "added" | "removed";
+	type: "added" | "removed" | "unchanged";
 	text: string;
 };
 
@@ -28,23 +28,56 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const splitLines = (content: string) => content.split("\n");
 
+/**
+ * Compute a line-level diff between oldContent and newContent
+ * using a simple LCS-based algorithm. Returns lines annotated
+ * as "unchanged", "removed", or "added".
+ */
 const buildDiffLines = (oldContent: string, newContent: string): DiffLine[] => {
 	if (oldContent.length === 0) {
-		return splitLines(newContent).map((line) => ({
-			type: "added",
-			text: line,
-		}));
+		return splitLines(newContent).map((line) => ({ type: "added", text: line }));
+	}
+	if (newContent.length === 0) {
+		return splitLines(oldContent).map((line) => ({ type: "removed", text: line }));
 	}
 
-	const removedLines = splitLines(oldContent).map((line) => ({
-		type: "removed" as const,
-		text: line,
-	}));
-	const addedLines = splitLines(newContent).map((line) => ({
-		type: "added" as const,
-		text: line,
-	}));
-	return [...removedLines, ...addedLines];
+	const oldLines = splitLines(oldContent);
+	const newLines = splitLines(newContent);
+
+	// Build the LCS table.
+	const m = oldLines.length;
+	const n = newLines.length;
+	const dp: number[][] = Array.from({ length: m + 1 }, () =>
+		new Array<number>(n + 1).fill(0),
+	);
+	for (let i = 1; i <= m; i++) {
+		for (let j = 1; j <= n; j++) {
+			dp[i][j] =
+				oldLines[i - 1] === newLines[j - 1]
+					? dp[i - 1][j - 1] + 1
+					: Math.max(dp[i - 1][j], dp[i][j - 1]);
+		}
+	}
+
+	// Backtrack to produce the diff.
+	const result: DiffLine[] = [];
+	let i = m;
+	let j = n;
+	while (i > 0 || j > 0) {
+		if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+			result.push({ type: "unchanged", text: oldLines[i - 1] });
+			i--;
+			j--;
+		} else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+			result.push({ type: "added", text: newLines[j - 1] });
+			j--;
+		} else {
+			result.push({ type: "removed", text: oldLines[i - 1] });
+			i--;
+		}
+	}
+
+	return result.reverse();
 };
 
 export const EditApprovalCard: FC<EditApprovalCardProps> = ({
@@ -114,23 +147,26 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 			{toolCall.toolName === "editFile" ? (
 				<div className="max-h-56 overflow-y-auto rounded-md border border-solid border-border-default bg-surface-primary">
 					{diffLines.length > 0 ? (
-						diffLines.map((line, index) => {
-							const isAdded = line.type === "added";
-							return (
-								<div
-									key={`${line.type}-${index}-${line.text}`}
-									className={cn(
-										"font-mono text-[11px] leading-5 px-2",
-										isAdded
-											? "bg-surface-positive/30 text-content-positive"
-											: "bg-surface-destructive/30 text-content-destructive",
-									)}
-								>
-									{isAdded ? "+" : "-"}
-									{line.text}
-								</div>
-							);
-						})
+						diffLines.map((line, index) => (
+							<div
+								key={`${line.type}-${index}`}
+								className={cn(
+									"font-mono text-[11px] leading-5 px-2",
+									line.type === "added" &&
+										"bg-surface-positive/30 text-content-positive",
+									line.type === "removed" &&
+										"bg-surface-destructive/30 text-content-destructive",
+									line.type === "unchanged" && "text-content-secondary",
+								)}
+							>
+								{line.type === "added"
+									? "+"
+									: line.type === "removed"
+										? "−"
+										: " "}
+								{line.text}
+							</div>
+						))
 					) : (
 						<p className="p-2 text-xs text-content-secondary">
 							No content changes.
