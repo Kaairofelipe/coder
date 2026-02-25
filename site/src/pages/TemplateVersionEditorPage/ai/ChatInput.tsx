@@ -90,6 +90,7 @@ export const ChatInput: FC<ChatInputProps> = ({
 			<Button
 				variant="outline"
 				size="icon"
+				className="h-9 w-9 shrink-0"
 				onClick={handleSend}
 				disabled={disabled || value.trim().length === 0}
 				aria-label="Send message"
