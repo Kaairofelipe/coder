@@ -86,24 +86,24 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 
 			<div ref={listRef} className="flex-1 overflow-y-auto px-3 py-2">
 				<div className="flex min-h-full flex-col justify-end gap-3">
-				{messages.length === 0 && (
-					<p className="m-0 text-xs leading-relaxed text-content-secondary">
-						Ask me to inspect or modify your template files. I can read files,
-						propose edits, and ask for approval before changing anything.
-					</p>
-				)}
+					{messages.length === 0 && (
+						<p className="m-0 text-xs leading-relaxed text-content-secondary">
+							Ask me to inspect or modify your template files. I can read files,
+							propose edits, and ask for approval before changing anything.
+						</p>
+					)}
 
-				{messages.map((message) => (
-					<ChatMessage
-						key={message.id}
-						message={message}
-						pendingApproval={pendingApproval}
-						onApprove={approve}
-						onReject={reject}
-						onNavigateToFile={onNavigateToFile}
-						getFileTree={getFileTree}
-					/>
-				))}
+					{messages.map((message) => (
+						<ChatMessage
+							key={message.id}
+							message={message}
+							pendingApproval={pendingApproval}
+							onApprove={approve}
+							onReject={reject}
+							onNavigateToFile={onNavigateToFile}
+							getFileTree={getFileTree}
+						/>
+					))}
 				</div>
 			</div>
 

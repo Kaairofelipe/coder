@@ -103,9 +103,7 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 										className={cn(
 											"border-none bg-transparent p-0 text-left text-xs",
 											"text-content-link hover:underline",
-											onNavigateToFile
-												? "cursor-pointer"
-												: "cursor-default",
+											onNavigateToFile ? "cursor-pointer" : "cursor-default",
 										)}
 										disabled={!onNavigateToFile}
 									>
@@ -127,9 +125,7 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 										className={cn(
 											"border-none bg-transparent p-0 text-xs",
 											"text-content-link hover:underline",
-											onNavigateToFile
-												? "cursor-pointer"
-												: "cursor-default",
+											onNavigateToFile ? "cursor-pointer" : "cursor-default",
 										)}
 									>
 										{path}

@@ -34,9 +34,7 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 						<UserIcon className="size-3" />
 						<span>You</span>
 					</div>
-					<MemoizedChatMarkdown>
-						{message.content}
-					</MemoizedChatMarkdown>
+					<MemoizedChatMarkdown>{message.content}</MemoizedChatMarkdown>
 				</div>
 			</div>
 		);

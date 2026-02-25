@@ -380,9 +380,7 @@ describe("useTemplateAgent buildTemplate approvals", () => {
 			uiMessages: UIMessage[];
 		};
 		const lastMessage =
-			secondCallOptions.uiMessages[
-				secondCallOptions.uiMessages.length - 1
-			];
+			secondCallOptions.uiMessages[secondCallOptions.uiMessages.length - 1];
 		const approvalPart = lastMessage.parts.find(
 			(part) => part.type === "tool-buildTemplate",
 		) as

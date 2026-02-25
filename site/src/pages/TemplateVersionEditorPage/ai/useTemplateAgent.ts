@@ -13,8 +13,8 @@ import { API } from "api/api";
 import type { AIBridgeProvider, AIModelConfig } from "api/queries/aiBridge";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
-import { createTemplateAgentTools } from "./tools";
 import type { BuildOutput, BuildResult, PublishResult } from "./tools";
+import { createTemplateAgentTools } from "./tools";
 import type { AgentStatus, PendingToolCall } from "./types";
 
 /**
@@ -316,10 +316,7 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 		// lookups still match by ID.
 		if (currentText.length > 0 || currentToolCalls.length > 0) {
 			result.push({
-				id:
-					segmentIndex > 0
-						? `${message.id}-${segmentIndex}`
-						: message.id,
+				id: segmentIndex > 0 ? `${message.id}-${segmentIndex}` : message.id,
 				role: "assistant",
 				content: currentText,
 				toolCalls: currentToolCalls,

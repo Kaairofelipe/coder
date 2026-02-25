@@ -8,7 +8,12 @@ import {
 } from "lucide-react";
 import { type FC, useMemo } from "react";
 import { cn } from "utils/cn";
-import { existsFile, type FileTree, getFileText, isFolder } from "utils/filetree";
+import {
+	existsFile,
+	type FileTree,
+	getFileText,
+	isFolder,
+} from "utils/filetree";
 import type { DisplayToolCall } from "./useTemplateAgent";
 
 interface EditApprovalCardProps {

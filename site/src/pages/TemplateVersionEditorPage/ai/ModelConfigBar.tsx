@@ -15,7 +15,7 @@ import {
 	SelectValue,
 } from "components/Select/Select";
 import { SingleThumbSlider } from "components/Slider/SingleThumbSlider";
-import { useState, type FC } from "react";
+import { type FC, useState } from "react";
 
 const DEFAULT_REASONING_EFFORT: OpenAIReasoningEffort = "medium";
 const DEFAULT_THINKING_BUDGET_TOKENS = 10_240;
@@ -152,8 +152,7 @@ export const isAnthropicBudgetThinkingModel = (modelID: string): boolean => {
 /** Returns true for Anthropic models that support extended thinking. */
 export const isAnthropicThinkingModel = (modelID: string): boolean => {
 	return (
-		isAnthropicEffortModel(modelID) ||
-		isAnthropicBudgetThinkingModel(modelID)
+		isAnthropicEffortModel(modelID) || isAnthropicBudgetThinkingModel(modelID)
 	);
 };
 
@@ -307,9 +306,7 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 		<div className="px-3 py-1.5">
 			<div className="flex flex-wrap items-end gap-2">
 				<div className="min-w-[180px] flex-1">
-					<div className="mb-0.5 text-2xs text-content-secondary">
-						Model
-					</div>
+					<div className="mb-0.5 text-2xs text-content-secondary">Model</div>
 					<Select
 						value={selectedModelKey}
 						onValueChange={handleModelChange}
@@ -329,7 +326,10 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 								<SelectGroup>
 									<SelectLabel>OpenAI</SelectLabel>
 									{openAIModels.map((model) => (
-										<SelectItem key={toModelKey(model)} value={toModelKey(model)}>
+										<SelectItem
+											key={toModelKey(model)}
+											value={toModelKey(model)}
+										>
 											{model.id}
 										</SelectItem>
 									))}
@@ -339,7 +339,10 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 								<SelectGroup>
 									<SelectLabel>Anthropic</SelectLabel>
 									{anthropicModels.map((model) => (
-										<SelectItem key={toModelKey(model)} value={toModelKey(model)}>
+										<SelectItem
+											key={toModelKey(model)}
+											value={toModelKey(model)}
+										>
 											{model.id}
 										</SelectItem>
 									))}
@@ -362,7 +365,9 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 
 				{showOpenAIReasoning && (
 					<div className="w-[120px]">
-						<div className="mb-0.5 text-2xs text-content-secondary">Reasoning</div>
+						<div className="mb-0.5 text-2xs text-content-secondary">
+							Reasoning
+						</div>
 						<Select
 							value={reasoningEffort}
 							onValueChange={handleReasoningEffortChange}
@@ -398,41 +403,42 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 									<SelectItem value="disabled">Disabled</SelectItem>
 									<SelectItem value="adaptive">Adaptive</SelectItem>
 									{showAnthropicBudgetThinking && (
-											<SelectItem value="budget">Budget</SelectItem>
-										)}
+										<SelectItem value="budget">Budget</SelectItem>
+									)}
 								</SelectContent>
 							</Select>
 						</div>
-						{showAnthropicBudgetThinking && selectedThinkingMode === "budget" && (
-							<div className="min-w-[180px] flex-1">
-								<div className="mb-0.5 flex items-center justify-between text-2xs text-content-secondary">
-									<span>Thinking budget</span>
-									<span>{thinkingBudgetTokens.toLocaleString()} tokens</span>
+						{showAnthropicBudgetThinking &&
+							selectedThinkingMode === "budget" && (
+								<div className="min-w-[180px] flex-1">
+									<div className="mb-0.5 flex items-center justify-between text-2xs text-content-secondary">
+										<span>Thinking budget</span>
+										<span>{thinkingBudgetTokens.toLocaleString()} tokens</span>
+									</div>
+									<SingleThumbSlider
+										value={[thinkingBudgetTokens]}
+										min={MIN_THINKING_BUDGET_TOKENS}
+										max={MAX_THINKING_BUDGET_TOKENS}
+										step={THINKING_BUDGET_STEP_TOKENS}
+										onValueChange={(value) => {
+											const nextBudgetTokens = value[0];
+											if (typeof nextBudgetTokens !== "number") {
+												throw new Error(
+													"Expected a single slider value for thinking budget.",
+												);
+											}
+											onModelConfigChange({
+												...modelConfig,
+												thinking: {
+													type: "enabled",
+													budgetTokens:
+														clampThinkingBudgetTokens(nextBudgetTokens),
+												},
+											});
+										}}
+									/>
 								</div>
-								<SingleThumbSlider
-									value={[thinkingBudgetTokens]}
-									min={MIN_THINKING_BUDGET_TOKENS}
-									max={MAX_THINKING_BUDGET_TOKENS}
-									step={THINKING_BUDGET_STEP_TOKENS}
-									onValueChange={(value) => {
-										const nextBudgetTokens = value[0];
-										if (typeof nextBudgetTokens !== "number") {
-											throw new Error(
-												"Expected a single slider value for thinking budget.",
-											);
-										}
-										onModelConfigChange({
-											...modelConfig,
-											thinking: {
-												type: "enabled",
-												budgetTokens:
-													clampThinkingBudgetTokens(nextBudgetTokens),
-											},
-										});
-									}}
-								/>
-							</div>
-						)}
+							)}
 					</>
 				)}
 				{showAnthropicEffort && (
