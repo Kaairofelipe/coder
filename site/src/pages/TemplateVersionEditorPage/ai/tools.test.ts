@@ -16,20 +16,31 @@ const makeTools = (overrides: Record<string, unknown> = {}): ToolSet => {
 	return createTemplateAgentTools(() => fileTree, () => {}, overrides);
 };
 
-// The execute methods have a second arg for tool context. We use a
-// minimal stub that satisfies the type at runtime.
-const toolContext = {} as Parameters<ToolSet["buildTemplate"]["execute"]>[1];
+// The AI SDK tool context argument. Our mocked tool() is identity,
+// so execute is always present but typed as optional. We use a
+// minimal stub that satisfies the runtime contract.
+const toolContext = {} as never;
+
+// Helper to call tool execute with non-null assertion.
+// In tests, tool() is mocked as identity, so execute is always defined.
+const executeBuild = (tools: ToolSet) =>
+	// biome-ignore lint/style/noNonNullAssertion: mocked tool always has execute
+	tools.buildTemplate.execute!({}, toolContext);
+
+const executeGetBuildLogs = (tools: ToolSet) =>
+	// biome-ignore lint/style/noNonNullAssertion: mocked tool always has execute
+	tools.getBuildLogs.execute!({}, toolContext);
 
 describe("buildTemplate tool", () => {
 	it("returns error when onBuildRequested callback is not provided", async () => {
 		const tools = makeTools({ waitForBuildComplete: vi.fn() });
-		const result = await tools.buildTemplate.execute({}, toolContext);
+		const result = await executeBuild(tools);
 		expect(result).toEqual({ error: "Build tools are not available." });
 	});
 
 	it("returns error when waitForBuildComplete callback is not provided", async () => {
 		const tools = makeTools({ onBuildRequested: vi.fn() });
-		const result = await tools.buildTemplate.execute({}, toolContext);
+		const result = await executeBuild(tools);
 		expect(result).toEqual({ error: "Build tools are not available." });
 	});
 
@@ -38,7 +49,7 @@ describe("buildTemplate tool", () => {
 			onBuildRequested: vi.fn().mockRejectedValue(new Error("Upload failed")),
 			waitForBuildComplete: vi.fn(),
 		});
-		const result = await tools.buildTemplate.execute({}, toolContext);
+		const result = await executeBuild(tools);
 		expect(result).toMatchObject({
 			status: "failed",
 			error: "Upload failed",
@@ -54,10 +65,10 @@ describe("buildTemplate tool", () => {
 		const waitForBuildComplete = vi.fn().mockResolvedValue(buildResult);
 		const tools = makeTools({ onBuildRequested, waitForBuildComplete });
 
-		const result = await tools.buildTemplate.execute({}, toolContext);
+		const result = await executeBuild(tools);
 
-		expect(onBuildRequested).toHaveBeenCalledOnce();
-		expect(waitForBuildComplete).toHaveBeenCalledOnce();
+		expect(onBuildRequested).toHaveBeenCalledTimes(1);
+		expect(waitForBuildComplete).toHaveBeenCalledTimes(1);
 		expect(result).toEqual(buildResult);
 	});
 
@@ -70,7 +81,7 @@ describe("buildTemplate tool", () => {
 				waitForBuildComplete: vi.fn().mockReturnValue(neverResolves),
 			});
 
-			const resultPromise = tools.buildTemplate.execute({}, toolContext);
+			const resultPromise = executeBuild(tools);
 			await vi.advanceTimersByTimeAsync(180_000);
 			const result = await resultPromise;
 
@@ -84,7 +95,7 @@ describe("buildTemplate tool", () => {
 describe("getBuildLogs tool", () => {
 	it("returns error when getBuildOutput callback is not provided", async () => {
 		const tools = makeTools();
-		const result = await tools.getBuildLogs.execute({}, toolContext);
+		const result = await executeGetBuildLogs(tools);
 		expect(result).toEqual({ error: "Build tools are not available." });
 	});
 
@@ -92,7 +103,7 @@ describe("getBuildLogs tool", () => {
 		const tools = makeTools({
 			getBuildOutput: vi.fn().mockReturnValue(undefined),
 		});
-		const result = await tools.getBuildLogs.execute({}, toolContext);
+		const result = await executeGetBuildLogs(tools);
 		expect(result).toMatchObject({ status: "none" });
 	});
 
@@ -105,7 +116,7 @@ describe("getBuildLogs tool", () => {
 		const tools = makeTools({
 			getBuildOutput: vi.fn().mockReturnValue(output),
 		});
-		const result = await tools.getBuildLogs.execute({}, toolContext);
+		const result = await executeGetBuildLogs(tools);
 		expect(result).toEqual(output);
 	});
 });
