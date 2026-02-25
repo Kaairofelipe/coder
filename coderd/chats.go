@@ -121,7 +121,7 @@ type chatWorkspaceRequestMetadata struct {
 	RequestID  string      `json:"request_id,omitempty"`
 }
 
-// @Summary Watch chat list updates
+// @Summary Watch chats
 // @ID watch-chats
 // @Security CoderSessionToken
 // @Produce json
@@ -374,7 +374,7 @@ func synthesizeChatWorkspaceRequest(
 	return req, nil
 }
 
-// @Summary Create a chat
+// @Summary Create chat
 // @ID create-chat
 // @Security CoderSessionToken
 // @Accept json
@@ -614,7 +614,7 @@ func (api *API) listChatModels(rw http.ResponseWriter, r *http.Request) {
 	httpapi.Write(ctx, rw, http.StatusOK, response)
 }
 
-// @Summary Get a chat
+// @Summary Get chat
 // @ID get-chat
 // @Security CoderSessionToken
 // @Produce json
@@ -669,7 +669,7 @@ func (api *API) getChat(rw http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// @Summary Delete a chat
+// @Summary Delete chat
 // @ID delete-chat
 // @Security CoderSessionToken
 // @Tags Chats
@@ -747,7 +747,7 @@ func (api *API) deleteChat(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusNoContent)
 }
 
-// @Summary Create a chat message
+// @Summary Create chat message
 // @ID create-chat-message
 // @Security CoderSessionToken
 // @Accept json
@@ -1017,7 +1017,7 @@ func (api *API) createChatMessage(rw http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// @Summary Delete a queued chat message
+// @Summary Delete chat queued message
 // @ID delete-chat-queued-message
 // @Security CoderSessionToken
 // @Tags Chats
@@ -1083,7 +1083,7 @@ func (api *API) deleteChatQueuedMessage(rw http.ResponseWriter, r *http.Request)
 	rw.WriteHeader(http.StatusNoContent)
 }
 
-// @Summary Promote a queued message to send immediately
+// @Summary Promote chat queued message
 // @ID promote-chat-queued-message
 // @Security CoderSessionToken
 // @Produce json
@@ -1261,7 +1261,7 @@ func (api *API) promoteChatQueuedMessage(rw http.ResponseWriter, r *http.Request
 	httpapi.Write(ctx, rw, http.StatusOK, response)
 }
 
-// @Summary Stream chat updates
+// @Summary Stream chat
 // @ID stream-chat
 // @Security CoderSessionToken
 // @Produce json
@@ -1351,7 +1351,7 @@ func (api *API) streamChat(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// @Summary Interrupt a chat
+// @Summary Interrupt chat
 // @ID interrupt-chat
 // @Security CoderSessionToken
 // @Produce json
@@ -1413,7 +1413,7 @@ func (api *API) interruptChat(rw http.ResponseWriter, r *http.Request) {
 	httpapi.Write(ctx, rw, http.StatusOK, convertChat(chat, nil))
 }
 
-// @Summary Get diff status for a chat
+// @Summary Get chat diff status
 // @ID get-chat-diff-status
 // @Security CoderSessionToken
 // @Produce json
@@ -1455,7 +1455,7 @@ func (api *API) getChatDiffStatus(rw http.ResponseWriter, r *http.Request) {
 	httpapi.Write(ctx, rw, http.StatusOK, convertChatDiffStatus(chatID, status))
 }
 
-// @Summary Get diff contents for a chat
+// @Summary Get chat diff
 // @ID get-chat-diff
 // @Security CoderSessionToken
 // @Produce json
