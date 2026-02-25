@@ -16,10 +16,7 @@ interface ChatMarkdownProps {
  * overrides so headings, lists, and code blocks feel at home in a
  * narrow, dense chat context rather than a full-page article.
  */
-export const ChatMarkdown: FC<ChatMarkdownProps> = ({
-	children,
-	className,
-}) => {
+const ChatMarkdown: FC<ChatMarkdownProps> = ({ children, className }) => {
 	return (
 		<ReactMarkdown
 			remarkPlugins={[gfm]}

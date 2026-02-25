@@ -116,7 +116,7 @@ const getDefaultModelConfig = (model: AIBridgeModel): AIModelConfig => {
 };
 
 /** Returns true for OpenAI models that support reasoning effort. */
-export const isOpenAIReasoningModel = (modelID: string): boolean => {
+const isOpenAIReasoningModel = (modelID: string): boolean => {
 	const normalized = modelID.toLowerCase();
 	return (
 		normalized.startsWith("gpt-5") ||
@@ -127,7 +127,7 @@ export const isOpenAIReasoningModel = (modelID: string): boolean => {
 };
 
 /** Returns true for Anthropic 4.6 models that support effort+adaptive. */
-export const isAnthropicEffortModel = (modelID: string): boolean => {
+const isAnthropicEffortModel = (modelID: string): boolean => {
 	const normalized = modelID.toLowerCase();
 	return (
 		normalized.includes("claude-sonnet-4-6") ||
@@ -139,7 +139,7 @@ export const isAnthropicEffortModel = (modelID: string): boolean => {
  * Returns true for Anthropic models that support manual thinking budget
  * controls via budget tokens.
  */
-export const isAnthropicBudgetThinkingModel = (modelID: string): boolean => {
+const isAnthropicBudgetThinkingModel = (modelID: string): boolean => {
 	const normalized = modelID.toLowerCase();
 	return (
 		(normalized.includes("claude-3-7-sonnet") ||
@@ -150,7 +150,7 @@ export const isAnthropicBudgetThinkingModel = (modelID: string): boolean => {
 };
 
 /** Returns true for Anthropic models that support extended thinking. */
-export const isAnthropicThinkingModel = (modelID: string): boolean => {
+const isAnthropicThinkingModel = (modelID: string): boolean => {
 	return (
 		isAnthropicEffortModel(modelID) || isAnthropicBudgetThinkingModel(modelID)
 	);
