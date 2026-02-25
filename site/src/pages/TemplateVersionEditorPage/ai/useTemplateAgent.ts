@@ -92,10 +92,13 @@ Rules:
 - After making changes, use buildTemplate to validate them.
 - If a build fails, use getBuildLogs to understand the error and fix it.
 - When the user asks about build errors, use getBuildLogs to read the logs.
-- After a successful build, you may offer to publish the template.
-  Do not publish automatically — ask the user first.
-- Use publishTemplate to publish. If name is omitted the current
-  version name is kept.`;
+- When the user asks you to publish (or says "build and publish"),
+  call publishTemplate directly with sensible defaults — do not ask
+  follow-up questions about version name or changelog message.
+  The tool requires user approval, so they will get a chance to
+  review before it executes.
+- For publishTemplate: omit name to keep the current version name.
+  Generate a short changelog message from the changes you made.`;
 
 const createTemplateAgent = (
 	modelConfig: AIModelConfig,
