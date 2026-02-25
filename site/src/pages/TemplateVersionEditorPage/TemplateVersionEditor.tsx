@@ -356,6 +356,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 
 	// Abort any active stream when the page-level component is
 	// unmounted so we don't leave orphaned network requests.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup runs only on unmount
 	useEffect(() => {
 		return () => {
 			templateAgent.stop();
