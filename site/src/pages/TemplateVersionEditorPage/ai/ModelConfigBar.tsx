@@ -307,15 +307,8 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 		<div className="px-3 py-1.5">
 			<div className="flex flex-wrap items-end gap-2">
 				<div className="min-w-[180px] flex-1">
-					<div className="mb-0.5 flex items-center justify-between text-2xs text-content-secondary">
-						<span>Model</span>
-						<button
-							type="button"
-							className="border-none bg-transparent p-0 text-2xs text-content-link hover:underline cursor-pointer"
-							onClick={() => setShowAllModels((prev) => !prev)}
-						>
-							{showAllModels ? "Fewer models" : "All models"}
-						</button>
+					<div className="mb-0.5 text-2xs text-content-secondary">
+						Model
 					</div>
 					<Select value={selectedModelKey} onValueChange={handleModelChange}>
 						<SelectTrigger className="h-8 text-xs">
@@ -342,6 +335,19 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 									))}
 								</SelectGroup>
 							)}
+							{/* Separator + toggle rendered inside the dropdown so
+							    it doesn't consume header space. onPointerDown
+							    prevents Radix from closing the popover. */}
+							<div className="border-t border-solid border-border px-2 py-1.5">
+								<button
+									type="button"
+									className="w-full border-none bg-transparent p-0 text-left text-xs text-content-link hover:underline cursor-pointer"
+									onPointerDown={(e) => e.preventDefault()}
+									onClick={() => setShowAllModels((prev) => !prev)}
+								>
+									{showAllModels ? "Show fewer models" : "Show all models"}
+								</button>
+							</div>
 						</SelectContent>
 					</Select>
 				</div>

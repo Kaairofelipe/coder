@@ -58,15 +58,14 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 		toolCall.toolName === "listFiles" ? FolderOpenIcon : FileTextIcon;
 
 	return (
-		<div className="rounded-md border border-solid border-border-default">
+		<div>
 			<button
 				type="button"
 				onClick={() => setExpanded((prev) => !prev)}
 				className={cn(
-					"flex w-full items-center gap-2 px-2.5 py-2 text-left",
-					"cursor-pointer bg-transparent transition-colors",
+					"flex w-full items-center gap-2 rounded-md px-1 py-1 text-left",
+					"cursor-pointer border-none bg-transparent transition-colors",
 					"hover:bg-surface-secondary",
-					expanded ? "rounded-t-md" : "rounded-md",
 				)}
 			>
 				{expanded ? (
@@ -86,7 +85,7 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 			</button>
 
 			{expanded && (
-				<div className="border-solid border-t border-border-default px-2.5 pb-2.5 pt-2">
+				<div className="px-1 pb-1 pt-1">
 					{error && (
 						<div className="mb-2 flex items-start gap-2 rounded-md bg-surface-destructive/10 p-2 text-xs text-content-destructive">
 							<AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />

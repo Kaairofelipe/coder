@@ -89,7 +89,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 
 	return (
 		<div className="flex h-full flex-col border-solid border-l border-border-default bg-surface-primary">
-			<div className="flex items-center justify-between border-solid border-b border-border-default px-3 py-2">
+			<div className="flex items-center justify-between px-3 py-2">
 				<div className="flex items-center gap-2 text-sm font-medium text-content-primary">
 					<SparklesIcon className="size-4 text-content-link" />
 					<span>AI Assistant</span>
