@@ -3,6 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import {
 	createAgentUIStream,
 	getToolName,
+	isReasoningUIPart,
 	isToolUIPart,
 	readUIMessageStream,
 	stepCountIs,
@@ -179,11 +180,17 @@ export interface DisplayToolCall {
 	state: "pending" | "result";
 }
 
+export interface DisplayReasoning {
+	text: string;
+	isStreaming: boolean;
+}
+
 export interface DisplayMessage {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
 	toolCalls: DisplayToolCall[];
+	reasoning: DisplayReasoning[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -276,6 +283,7 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 				role: "user",
 				content,
 				toolCalls: [],
+				reasoning: [],
 			});
 			continue;
 		}
@@ -283,10 +291,11 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 		// Split assistant messages into chronological segments.
 		// A new segment starts when a text part follows a tool
 		// part, preserving the natural conversation flow:
-		// text → tool calls → text → tool calls.
+		// reasoning → text → tool calls → reasoning → text → tool calls.
 		let segmentIndex = 0;
 		let currentText = "";
 		let currentToolCalls: DisplayToolCall[] = [];
+		let currentReasoning: DisplayReasoning[] = [];
 		let lastPartWasTool = false;
 
 		for (const part of message.parts) {
@@ -299,12 +308,21 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 						role: "assistant",
 						content: currentText,
 						toolCalls: currentToolCalls,
+						reasoning: currentReasoning,
 					});
 					currentText = "";
 					currentToolCalls = [];
+					currentReasoning = [];
 				}
 				currentText += part.text;
 				lastPartWasTool = false;
+			} else if (isReasoningUIPart(part)) {
+				currentReasoning.push({
+					text: part.text,
+					isStreaming: part.state === "streaming",
+				});
+				// Reasoning doesn't flip the lastPartWasTool
+				// flag — it flows before the text it explains.
 			} else if (isToolUIPart(part)) {
 				currentToolCalls.push(mapToolStateToDisplay(part));
 				lastPartWasTool = true;
@@ -314,12 +332,17 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 		// Flush the final segment. Use the original message ID
 		// when only one segment was produced so that approval
 		// lookups still match by ID.
-		if (currentText.length > 0 || currentToolCalls.length > 0) {
+		if (
+			currentText.length > 0 ||
+			currentToolCalls.length > 0 ||
+			currentReasoning.length > 0
+		) {
 			result.push({
 				id: segmentIndex > 0 ? `${message.id}-${segmentIndex}` : message.id,
 				role: "assistant",
 				content: currentText,
 				toolCalls: currentToolCalls,
+				reasoning: currentReasoning,
 			});
 		}
 	}

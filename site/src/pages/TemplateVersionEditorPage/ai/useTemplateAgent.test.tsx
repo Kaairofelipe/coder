@@ -32,6 +32,9 @@ vi.mock("ai", () => {
 			}
 			return part.type === "dynamic-tool" || part.type.startsWith("tool-");
 		},
+		isReasoningUIPart: (part: { type?: unknown }) => {
+			return typeof part?.type === "string" && part.type === "reasoning";
+		},
 	};
 });
 

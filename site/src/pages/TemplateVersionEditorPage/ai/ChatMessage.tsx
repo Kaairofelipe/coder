@@ -5,6 +5,7 @@ import { BuildApprovalCard } from "./BuildApprovalCard";
 import { MemoizedChatMarkdown } from "./ChatMarkdown";
 import { EditApprovalCard } from "./EditApprovalCard";
 import { PublishApprovalCard } from "./PublishApprovalCard";
+import { ReasoningBlock } from "./ReasoningBlock";
 import { ToolCallCard } from "./ToolCallCard";
 import type { PendingToolCall } from "./types";
 import type { DisplayMessage } from "./useTemplateAgent";
@@ -42,6 +43,10 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 
 	return (
 		<div className="space-y-2">
+			{message.reasoning.length > 0 && (
+				<ReasoningBlock reasoning={message.reasoning} />
+			)}
+
 			{message.content.trim().length > 0 && (
 				<MemoizedChatMarkdown className="prose-invert">
 					{message.content}
