@@ -254,3 +254,154 @@ describe("useTemplateAgent approvals", () => {
 		expect(result.current.pendingApproval).toBeNull();
 	});
 });
+
+const buildApprovalMessage: UIMessage = {
+	id: "assistant-1",
+	role: "assistant",
+	parts: [
+		{ type: "text", text: "I'll build the template to check." },
+		{
+			type: "tool-buildTemplate",
+			toolCallId: "tool-build-1",
+			state: "approval-requested",
+			input: {},
+			approval: { id: "approval-build-1" },
+		},
+	],
+};
+
+const buildApprovedResultMessage: UIMessage = {
+	id: "assistant-1",
+	role: "assistant",
+	parts: [
+		{ type: "text", text: "Build succeeded." },
+		{
+			type: "tool-buildTemplate",
+			toolCallId: "tool-build-1",
+			state: "output-available",
+			input: {},
+			output: { status: "succeeded", logs: "..." },
+			approval: { id: "approval-build-1", approved: true },
+		},
+	],
+};
+
+const buildDeniedResultMessage: UIMessage = {
+	id: "assistant-1",
+	role: "assistant",
+	parts: [
+		{ type: "text", text: "Build was rejected." },
+		{
+			type: "tool-buildTemplate",
+			toolCallId: "tool-build-1",
+			state: "output-denied",
+			input: {},
+			approval: {
+				id: "approval-build-1",
+				approved: false,
+				reason: "User rejected this action.",
+			},
+		},
+	],
+};
+
+describe("useTemplateAgent buildTemplate approvals", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("moves to awaiting_approval when buildTemplate needs approval", async () => {
+		enqueueUIMessageStreams([
+			[buildApprovalMessage],
+			[buildApprovedResultMessage],
+		]);
+		const { result } = renderTemplateAgentHook();
+
+		act(() => {
+			result.current.send("Build it");
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("awaiting_approval");
+		});
+		expect(result.current.pendingApproval?.toolCallId).toBe("tool-build-1");
+	});
+
+	it("resumes stream after buildTemplate is approved", async () => {
+		enqueueUIMessageStreams([
+			[buildApprovalMessage],
+			[buildApprovedResultMessage],
+		]);
+		const { result } = renderTemplateAgentHook();
+
+		act(() => {
+			result.current.send("Build it");
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("awaiting_approval");
+		});
+
+		act(() => {
+			result.current.approve();
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("idle");
+		});
+		expect(createAgentUIStreamMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("marks the approval as denied and resumes the stream on reject", async () => {
+		enqueueUIMessageStreams([
+			[buildApprovalMessage],
+			[buildDeniedResultMessage],
+		]);
+		const { result } = renderTemplateAgentHook();
+
+		act(() => {
+			result.current.send("Build it");
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("awaiting_approval");
+		});
+
+		act(() => {
+			result.current.reject();
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("idle");
+		});
+		expect(createAgentUIStreamMock).toHaveBeenCalledTimes(2);
+
+		const secondCallOptions = createAgentUIStreamMock.mock.calls[1]?.[0] as {
+			uiMessages: UIMessage[];
+		};
+		const lastMessage =
+			secondCallOptions.uiMessages[
+				secondCallOptions.uiMessages.length - 1
+			];
+		const approvalPart = lastMessage.parts.find(
+			(part) => part.type === "tool-buildTemplate",
+		) as
+			| {
+					state: string;
+					approval: {
+						id: string;
+						approved: boolean;
+						reason?: string;
+					};
+			  }
+			| undefined;
+		expect(approvalPart).toMatchObject({
+			state: "approval-responded",
+			approval: {
+				id: "approval-build-1",
+				approved: false,
+				reason: "User rejected this action.",
+			},
+		});
+	});
+});
