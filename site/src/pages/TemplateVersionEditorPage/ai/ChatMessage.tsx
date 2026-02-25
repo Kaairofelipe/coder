@@ -32,7 +32,7 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 						<UserIcon className="size-3" />
 						<span>You</span>
 					</div>
-					<MemoizedChatMarkdown className="prose-invert">
+					<MemoizedChatMarkdown>
 						{message.content}
 					</MemoizedChatMarkdown>
 				</div>
@@ -43,7 +43,7 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 	return (
 		<div className="space-y-2">
 			{message.content.trim().length > 0 && (
-				<MemoizedChatMarkdown>
+				<MemoizedChatMarkdown className="prose-invert">
 					{message.content}
 				</MemoizedChatMarkdown>
 			)}

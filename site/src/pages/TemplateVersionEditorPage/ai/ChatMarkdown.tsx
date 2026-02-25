@@ -36,8 +36,6 @@ export const ChatMarkdown: FC<ChatMarkdownProps> = ({
 				"prose-code:before:content-none prose-code:after:content-none",
 				// Links.
 				"prose-a:text-content-link prose-a:no-underline hover:prose-a:underline",
-				// Invert colors for dark theme compatibility.
-				"prose-invert",
 				className,
 			)}
 		>
