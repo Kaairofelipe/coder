@@ -75,6 +75,7 @@ import {
 } from "utils/filetree";
 import { AIChatPanel } from "./ai/AIChatPanel";
 import { isCuratedModel } from "./ai/ModelConfigBar";
+import { useTemplateAgent } from "./ai/useTemplateAgent";
 import {
 	CreateFileDialog,
 	DeleteFileDialog,
@@ -238,6 +239,47 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		},
 		[],
 	);
+
+	// Wrap onActivePathChange so the AI agent can navigate to a
+	// file only if it actually exists and is not a folder.
+	const navigateToExistingFile = useCallback(
+		(path: string) => {
+			if (path.length === 0) {
+				return;
+			}
+			const tree = fileTreeRef.current;
+			if (!existsFile(path, tree) || isFolder(path, tree)) {
+				return;
+			}
+			onActivePathChange(path);
+		},
+		[onActivePathChange],
+	);
+
+	// The agent hook lives here (not inside AIChatPanel) so that
+	// chat history survives the panel being toggled open/closed.
+	// The panel merely presents the state this hook manages.
+	const templateAgent = useTemplateAgent({
+		getFileTree,
+		setFileTree: setFileTreeAndDirty,
+		modelConfig: aiModelConfig ?? { model: { id: "", provider: "openai" } },
+		onFileEdited: navigateToExistingFile,
+		onFileDeleted: (path) => {
+			if (activePath === path) {
+				onActivePathChange(undefined);
+			}
+		},
+	});
+
+	// Abort any active stream when the page-level component is
+	// unmounted so we don't leave orphaned network requests.
+	useEffect(() => {
+		return () => {
+			templateAgent.stop();
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- run only on unmount
+	}, []);
+
 	const matchingProvisioners = templateVersion.matched_provisioners?.count;
 	const availableProvisioners = templateVersion.matched_provisioners?.available;
 
@@ -702,20 +744,12 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 									minSize={20}
 								>
 									<AIChatPanel
+										agent={templateAgent}
 										getFileTree={getFileTree}
-										setFileTree={setFileTreeAndDirty}
 										modelConfig={aiModelConfig}
 										availableModels={aiModels}
 										onModelConfigChange={setAIModelConfig}
-										onNavigateToFile={onActivePathChange}
-										onFileDeleted={(path) => {
-											// Clear the active path if the deleted
-											// file is currently open, matching the
-											// behavior of the manual delete flow.
-											if (activePath === path) {
-												onActivePathChange(undefined);
-											}
-										}}
+										onNavigateToFile={navigateToExistingFile}
 										onClose={() => {
 											setAIPanelOpen(false);
 										}}

@@ -1,48 +1,32 @@
 import type { AIBridgeModel, AIModelConfig } from "api/queries/aiBridge";
 import { Button } from "components/Button/Button";
 import { RotateCcwIcon, SparklesIcon, XIcon } from "lucide-react";
-import { type FC, useCallback, useEffect, useRef } from "react";
-import { existsFile, type FileTree, isFolder } from "utils/filetree";
+import { type FC, useEffect, useRef } from "react";
+import type { FileTree } from "utils/filetree";
 import { ChatInput } from "./ChatInput";
 import { ChatMessage } from "./ChatMessage";
 import { ModelConfigBar } from "./ModelConfigBar";
-import { useTemplateAgent } from "./useTemplateAgent";
+import type { TemplateAgentState } from "./useTemplateAgent";
 
 interface AIChatPanelProps {
+	agent: TemplateAgentState;
 	getFileTree: () => FileTree;
-	setFileTree: (updater: (prev: FileTree) => FileTree) => void;
 	modelConfig: AIModelConfig;
 	availableModels: readonly AIBridgeModel[];
 	onModelConfigChange: (config: AIModelConfig) => void;
 	onNavigateToFile?: (path: string) => void;
-	onFileDeleted?: (path: string) => void;
 	onClose: () => void;
 }
 
 export const AIChatPanel: FC<AIChatPanelProps> = ({
+	agent,
 	getFileTree,
-	setFileTree,
 	modelConfig,
 	availableModels,
 	onModelConfigChange,
 	onNavigateToFile,
-	onFileDeleted,
 	onClose,
 }) => {
-	const navigateToExistingFile = useCallback(
-		(path: string) => {
-			if (!onNavigateToFile || path.length === 0) {
-				return;
-			}
-			const tree = getFileTree();
-			if (!existsFile(path, tree) || isFolder(path, tree)) {
-				return;
-			}
-			onNavigateToFile(path);
-		},
-		[getFileTree, onNavigateToFile],
-	);
-
 	const {
 		messages,
 		isStreaming,
@@ -51,24 +35,8 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 		send,
 		approve,
 		reject,
-		stop,
 		reset,
-	} = useTemplateAgent({
-		getFileTree,
-		setFileTree,
-		modelConfig,
-		onFileEdited: navigateToExistingFile,
-		onFileDeleted,
-	});
-
-	// Abort any active stream when the panel is unmounted so we
-	// don't leave orphaned network requests running in the
-	// background.
-	useEffect(() => {
-		return () => {
-			stop();
-		};
-	}, [stop]);
+	} = agent;
 
 	const listRef = useRef<HTMLDivElement>(null);
 
@@ -132,7 +100,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 						pendingApproval={pendingApproval}
 						onApprove={approve}
 						onReject={reject}
-						onNavigateToFile={navigateToExistingFile}
+						onNavigateToFile={onNavigateToFile}
 						getFileTree={getFileTree}
 					/>
 				))}

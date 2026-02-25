@@ -621,3 +621,5 @@ export const useTemplateAgent = ({
 		reset,
 	};
 };
+
+export type TemplateAgentState = ReturnType<typeof useTemplateAgent>;
