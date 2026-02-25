@@ -6,14 +6,17 @@ vi.mock("ai", () => ({
 }));
 
 // Import AFTER the mock is set up.
-// biome-ignore lint/correctness/noUndeclaredVariables: hoisted vi.mock
 const { createTemplateAgentTools } = await import("./tools");
 
 type ToolSet = ReturnType<typeof createTemplateAgentTools>;
 
 const makeTools = (overrides: Record<string, unknown> = {}): ToolSet => {
 	const fileTree: FileTree = { "main.tf": 'resource "null" {}' };
-	return createTemplateAgentTools(() => fileTree, () => {}, overrides);
+	return createTemplateAgentTools(
+		() => fileTree,
+		() => {},
+		overrides,
+	);
 };
 
 // The AI SDK tool context argument. Our mocked tool() is identity,
@@ -24,11 +27,9 @@ const toolContext = {} as never;
 // Helper to call tool execute with non-null assertion.
 // In tests, tool() is mocked as identity, so execute is always defined.
 const executeBuild = (tools: ToolSet) =>
-	// biome-ignore lint/style/noNonNullAssertion: mocked tool always has execute
 	tools.buildTemplate.execute!({}, toolContext);
 
 const executeGetBuildLogs = (tools: ToolSet) =>
-	// biome-ignore lint/style/noNonNullAssertion: mocked tool always has execute
 	tools.getBuildLogs.execute!({}, toolContext);
 
 describe("buildTemplate tool", () => {
@@ -121,10 +122,8 @@ describe("getBuildLogs tool", () => {
 	});
 });
 
-
 describe("publishTemplate tool", () => {
 	const executePublish = (tools: ToolSet, args: Record<string, unknown> = {}) =>
-		// biome-ignore lint/style/noNonNullAssertion: mocked tool always has execute
 		tools.publishTemplate.execute!(args as never, toolContext);
 
 	it("returns error when onPublishRequested callback is not provided", async () => {

@@ -303,7 +303,10 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 					message: data.message ?? "",
 					isActiveVersion: data.isActiveVersion ?? true,
 				});
-				return { success: true, versionName: data.name ?? templateVersion.name };
+				return {
+					success: true,
+					versionName: data.name ?? templateVersion.name,
+				};
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : "Failed to publish";
 				return { success: false, error: msg };
