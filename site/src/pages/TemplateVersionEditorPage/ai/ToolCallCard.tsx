@@ -85,7 +85,7 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 			</button>
 
 			{expanded && (
-				<div className="px-1 pb-1 pt-1">
+				<div className="ml-3 border-solid border-0 border-l-2 border-border pl-3 pb-1 pt-1">
 					{error && (
 						<div className="mb-2 flex items-start gap-2 rounded-md bg-surface-destructive/10 p-2 text-xs text-content-destructive">
 							<AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
