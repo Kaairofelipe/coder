@@ -4,6 +4,7 @@ import type { FileTree } from "utils/filetree";
 import { BuildApprovalCard } from "./BuildApprovalCard";
 import { MemoizedChatMarkdown } from "./ChatMarkdown";
 import { EditApprovalCard } from "./EditApprovalCard";
+import { PublishApprovalCard } from "./PublishApprovalCard";
 import { ToolCallCard } from "./ToolCallCard";
 import type { PendingToolCall } from "./types";
 import type { DisplayMessage } from "./useTemplateAgent";
@@ -78,6 +79,23 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 						toolCall.state === "pending";
 					return (
 						<BuildApprovalCard
+							key={toolCall.toolCallId}
+							toolCall={toolCall}
+							isPending={isPending}
+							onApprove={onApprove}
+							onReject={onReject}
+						/>
+					);
+				}
+
+				const isPublishAction = toolCall.toolName === "publishTemplate";
+
+				if (isPublishAction) {
+					const isPending =
+						pendingApproval?.toolCallId === toolCall.toolCallId &&
+						toolCall.state === "pending";
+					return (
+						<PublishApprovalCard
 							key={toolCall.toolCallId}
 							toolCall={toolCall}
 							isPending={isPending}

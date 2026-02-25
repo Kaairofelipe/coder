@@ -120,3 +120,60 @@ describe("getBuildLogs tool", () => {
 		expect(result).toEqual(output);
 	});
 });
+
+
+describe("publishTemplate tool", () => {
+	const executePublish = (tools: ToolSet, args: Record<string, unknown> = {}) =>
+		// biome-ignore lint/style/noNonNullAssertion: mocked tool always has execute
+		tools.publishTemplate.execute!(args as never, toolContext);
+
+	it("returns error when onPublishRequested callback is not provided", async () => {
+		const tools = makeTools();
+		const result = await executePublish(tools);
+		expect(result).toEqual({
+			success: false,
+			error: "Publish is not available.",
+		});
+	});
+
+	it("returns success when callback resolves with success", async () => {
+		const publishResult = { success: true, versionName: "v1.0" };
+		const tools = makeTools({
+			onPublishRequested: vi.fn().mockResolvedValue(publishResult),
+		});
+		const result = await executePublish(tools, {
+			name: "v1.0",
+			message: "Initial release",
+			isActiveVersion: true,
+		});
+		expect(result).toEqual(publishResult);
+	});
+
+	it("returns failure when callback throws", async () => {
+		const tools = makeTools({
+			onPublishRequested: vi
+				.fn()
+				.mockRejectedValue(new Error("Publish API error")),
+		});
+		const result = await executePublish(tools);
+		expect(result).toEqual({
+			success: false,
+			error: "Publish API error",
+		});
+	});
+
+	it("passes name, message, and isActiveVersion through to callback", async () => {
+		const onPublishRequested = vi.fn().mockResolvedValue({ success: true });
+		const tools = makeTools({ onPublishRequested });
+		await executePublish(tools, {
+			name: "my-version",
+			message: "changelog entry",
+			isActiveVersion: false,
+		});
+		expect(onPublishRequested).toHaveBeenCalledWith({
+			name: "my-version",
+			message: "changelog entry",
+			isActiveVersion: false,
+		});
+	});
+});

@@ -75,7 +75,7 @@ import {
 } from "utils/filetree";
 import { AIChatPanel } from "./ai/AIChatPanel";
 import { isCuratedModel } from "./ai/ModelConfigBar";
-import type { BuildOutput, BuildResult } from "./ai/tools";
+import type { BuildOutput, BuildResult, PublishResult } from "./ai/tools";
 import { useTemplateAgent } from "./ai/useTemplateAgent";
 import {
 	CreateFileDialog,
@@ -283,6 +283,35 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		return { status, error: templateVersion.job.error, logs: logText };
 	}, [templateVersion.job.status, templateVersion.job.error, buildLogs]);
 
+	const handlePublish = useCallback(
+		async (data: {
+			name?: string;
+			message?: string;
+			isActiveVersion?: boolean;
+		}): Promise<PublishResult> => {
+			if (!canPublish) {
+				return {
+					success: false,
+					error: dirty
+						? "There are unsaved changes. Build the template first."
+						: "Cannot publish — the build must succeed first.",
+				};
+			}
+			try {
+				await onConfirmPublish({
+					name: data.name ?? templateVersion.name,
+					message: data.message ?? "",
+					isActiveVersion: data.isActiveVersion ?? true,
+				});
+				return { success: true, versionName: data.name ?? templateVersion.name };
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : "Failed to publish";
+				return { success: false, error: msg };
+			}
+		},
+		[canPublish, dirty, onConfirmPublish, templateVersion.name],
+	);
+
 	// The agent hook lives here (not inside AIChatPanel) so that
 	// chat history survives the panel being toggled open/closed.
 	// The panel merely presents the state this hook manages.
@@ -299,6 +328,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		onBuildRequested: triggerBuild,
 		waitForBuildComplete,
 		getBuildOutput,
+		onPublishRequested: handlePublish,
 	});
 
 	// Resolve the build promise when job status becomes terminal.

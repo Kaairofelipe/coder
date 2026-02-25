@@ -405,3 +405,148 @@ describe("useTemplateAgent buildTemplate approvals", () => {
 		});
 	});
 });
+
+const publishApprovalMessage: UIMessage = {
+	id: "assistant-1",
+	role: "assistant",
+	parts: [
+		{ type: "text", text: "I'll publish the template now." },
+		{
+			type: "tool-publishTemplate",
+			toolCallId: "tool-publish-1",
+			state: "approval-requested",
+			input: { name: "v1.0", message: "First release", isActiveVersion: true },
+			approval: { id: "approval-publish-1" },
+		},
+	],
+};
+
+const publishApprovedResultMessage: UIMessage = {
+	id: "assistant-1",
+	role: "assistant",
+	parts: [
+		{ type: "text", text: "Published successfully." },
+		{
+			type: "tool-publishTemplate",
+			toolCallId: "tool-publish-1",
+			state: "output-available",
+			input: { name: "v1.0", message: "First release", isActiveVersion: true },
+			output: { success: true, versionName: "v1.0" },
+			approval: { id: "approval-publish-1", approved: true },
+		},
+	],
+};
+
+const publishDeniedResultMessage: UIMessage = {
+	id: "assistant-1",
+	role: "assistant",
+	parts: [
+		{ type: "text", text: "Publish was rejected." },
+		{
+			type: "tool-publishTemplate",
+			toolCallId: "tool-publish-1",
+			state: "output-denied",
+			input: { name: "v1.0", message: "First release", isActiveVersion: true },
+			approval: {
+				id: "approval-publish-1",
+				approved: false,
+				reason: "User rejected this action.",
+			},
+		},
+	],
+};
+
+describe("useTemplateAgent publishTemplate approvals", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("moves to awaiting_approval when publishTemplate needs approval", async () => {
+		enqueueUIMessageStreams([
+			[publishApprovalMessage],
+			[publishApprovedResultMessage],
+		]);
+		const { result } = renderTemplateAgentHook();
+
+		act(() => {
+			result.current.send("Publish the template");
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("awaiting_approval");
+		});
+		expect(result.current.pendingApproval?.toolCallId).toBe("tool-publish-1");
+	});
+
+	it("resumes stream after publishTemplate is approved", async () => {
+		enqueueUIMessageStreams([
+			[publishApprovalMessage],
+			[publishApprovedResultMessage],
+		]);
+		const { result } = renderTemplateAgentHook();
+
+		act(() => {
+			result.current.send("Publish the template");
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("awaiting_approval");
+		});
+
+		act(() => {
+			result.current.approve();
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("idle");
+		});
+		expect(createAgentUIStreamMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("marks denied and resumes on reject", async () => {
+		enqueueUIMessageStreams([
+			[publishApprovalMessage],
+			[publishDeniedResultMessage],
+		]);
+		const { result } = renderTemplateAgentHook();
+
+		act(() => {
+			result.current.send("Publish the template");
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("awaiting_approval");
+		});
+
+		act(() => {
+			result.current.reject();
+		});
+
+		await waitFor(() => {
+			expect(result.current.status).toBe("idle");
+		});
+		expect(createAgentUIStreamMock).toHaveBeenCalledTimes(2);
+
+		const secondCallOptions = createAgentUIStreamMock.mock.calls[1]?.[0] as {
+			uiMessages: UIMessage[];
+		};
+		const lastMessage =
+			secondCallOptions.uiMessages[secondCallOptions.uiMessages.length - 1];
+		const approvalPart = lastMessage.parts.find(
+			(part) => part.type === "tool-publishTemplate",
+		) as
+			| {
+					state: string;
+					approval: { id: string; approved: boolean; reason?: string };
+			  }
+			| undefined;
+		expect(approvalPart).toMatchObject({
+			state: "approval-responded",
+			approval: {
+				id: "approval-publish-1",
+				approved: false,
+				reason: "User rejected this action.",
+			},
+		});
+	});
+});

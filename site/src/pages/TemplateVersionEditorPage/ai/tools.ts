@@ -23,12 +23,23 @@ export interface BuildOutput {
 	logs: string;
 }
 
+export interface PublishResult {
+	success: boolean;
+	error?: string;
+	versionName?: string;
+}
+
 interface TemplateAgentToolCallbacks {
 	onFileEdited?: (path: string) => void;
 	onFileDeleted?: (path: string) => void;
 	onBuildRequested?: () => Promise<void>;
 	waitForBuildComplete?: () => Promise<BuildResult>;
 	getBuildOutput?: () => BuildOutput | undefined;
+	onPublishRequested?: (data: {
+		name?: string;
+		message?: string;
+		isActiveVersion?: boolean;
+	}) => Promise<PublishResult>;
 }
 
 /**
@@ -189,6 +200,45 @@ export function createTemplateAgentTools(
 					};
 				}
 				return output;
+			},
+		}),
+
+		publishTemplate: tool({
+			description:
+				"Publish the current template version. The build must have " +
+				"succeeded before publishing. Requires user approval. " +
+				"If name is omitted, the existing version name is kept.",
+			inputSchema: z.object({
+				name: z
+					.string()
+					.optional()
+					.describe("Version name (defaults to current version name)"),
+				message: z
+					.string()
+					.optional()
+					.describe("Changelog message describing the changes"),
+				isActiveVersion: z
+					.boolean()
+					.optional()
+					.default(true)
+					.describe("Whether to promote this as the active version"),
+			}),
+			needsApproval: true,
+			execute: async ({ name, message, isActiveVersion }) => {
+				if (!callbacks.onPublishRequested) {
+					return { success: false, error: "Publish is not available." };
+				}
+				try {
+					return await callbacks.onPublishRequested({
+						name,
+						message,
+						isActiveVersion,
+					});
+				} catch (err) {
+					const errorMessage =
+						err instanceof Error ? err.message : "Failed to publish";
+					return { success: false, error: errorMessage };
+				}
 			},
 		}),
 	};

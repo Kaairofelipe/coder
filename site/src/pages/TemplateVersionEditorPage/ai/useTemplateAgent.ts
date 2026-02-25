@@ -14,7 +14,7 @@ import type { AIBridgeProvider, AIModelConfig } from "api/queries/aiBridge";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
 import { createTemplateAgentTools } from "./tools";
-import type { BuildOutput, BuildResult } from "./tools";
+import type { BuildOutput, BuildResult, PublishResult } from "./tools";
 import type { AgentStatus, PendingToolCall } from "./types";
 
 /**
@@ -91,7 +91,11 @@ Rules:
 - Explain what you're changing and why before making edits.
 - After making changes, use buildTemplate to validate them.
 - If a build fails, use getBuildLogs to understand the error and fix it.
-- When the user asks about build errors, use getBuildLogs to read the logs.`;
+- When the user asks about build errors, use getBuildLogs to read the logs.
+- After a successful build, you may offer to publish the template.
+  Do not publish automatically — ask the user first.
+- Use publishTemplate to publish. If name is omitted the current
+  version name is kept.`;
 
 const createTemplateAgent = (
 	modelConfig: AIModelConfig,
@@ -103,6 +107,11 @@ const createTemplateAgent = (
 		onBuildRequested?: () => Promise<void>;
 		waitForBuildComplete?: () => Promise<BuildResult>;
 		getBuildOutput?: () => BuildOutput | undefined;
+		onPublishRequested?: (data: {
+			name?: string;
+			message?: string;
+			isActiveVersion?: boolean;
+		}) => Promise<PublishResult>;
 	},
 ) => {
 	const providerOptions: NonNullable<
@@ -151,6 +160,12 @@ interface UseTemplateAgentOptions {
 	waitForBuildComplete?: () => Promise<BuildResult>;
 	/** Returns the current build output snapshot, or undefined if no build has run. */
 	getBuildOutput?: () => BuildOutput | undefined;
+	/** Publishes the current template version. Returns success/error. */
+	onPublishRequested?: (data: {
+		name?: string;
+		message?: string;
+		isActiveVersion?: boolean;
+	}) => Promise<PublishResult>;
 }
 
 export interface DisplayToolCall {
@@ -331,7 +346,8 @@ const collectPendingApprovals = (
 			if (
 				toolName !== "editFile" &&
 				toolName !== "deleteFile" &&
-				toolName !== "buildTemplate"
+				toolName !== "buildTemplate" &&
+				toolName !== "publishTemplate"
 			) {
 				continue;
 			}
@@ -407,6 +423,7 @@ export const useTemplateAgent = ({
 	onBuildRequested,
 	waitForBuildComplete,
 	getBuildOutput,
+	onPublishRequested,
 }: UseTemplateAgentOptions) => {
 	const [uiMessages, setUIMessages] = useState<UIMessage[]>([]);
 	const [status, setStatus] = useState<AgentStatus>("idle");
@@ -441,6 +458,7 @@ export const useTemplateAgent = ({
 				onBuildRequested,
 				waitForBuildComplete,
 				getBuildOutput,
+				onPublishRequested,
 			});
 
 			let stream: Awaited<ReturnType<typeof createAgentUIStream>>;
@@ -506,6 +524,7 @@ export const useTemplateAgent = ({
 			onBuildRequested,
 			onFileDeleted,
 			onFileEdited,
+			onPublishRequested,
 			setConversationMessages,
 			setFileTree,
 			waitForBuildComplete,
