@@ -150,6 +150,9 @@ interface TemplateVersionEditorProps {
 	onPreview: (files: FileTree) => Promise<void>;
 	onPublish: () => void;
 	onConfirmPublish: (data: PublishVersionData) => void;
+	/** Publishes without navigating — used by the AI tool so the
+	 *  chat session survives the publish action. */
+	onPublishVersion: (data: PublishVersionData) => Promise<void>;
 	onCancelPublish: () => void;
 	publishingError?: unknown;
 	publishedVersion?: TemplateVersion;
@@ -176,6 +179,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	onPreview,
 	onPublish,
 	onConfirmPublish,
+	onPublishVersion,
 	onCancelPublish,
 	isAskingPublishParameters,
 	isPublishing,
@@ -298,7 +302,9 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 				};
 			}
 			try {
-				await onConfirmPublish({
+				// Use onPublishVersion (no navigation) instead of
+				// onConfirmPublish so the chat session survives.
+				await onPublishVersion({
 					name: data.name ?? templateVersion.name,
 					message: data.message ?? "",
 					isActiveVersion: data.isActiveVersion ?? true,
@@ -312,7 +318,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 				return { success: false, error: msg };
 			}
 		},
-		[canPublish, dirty, onConfirmPublish, templateVersion.name],
+		[canPublish, dirty, onPublishVersion, templateVersion.name],
 	);
 
 	// The agent hook lives here (not inside AIChatPanel) so that

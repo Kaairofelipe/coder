@@ -183,6 +183,22 @@ const TemplateVersionEditorPage: FC = () => {
 						);
 						navigateToVersion(publishedVersion);
 					}}
+					onPublishVersion={async ({ isActiveVersion, ...data }) => {
+						await publishVersionMutation.mutateAsync({
+							isActiveVersion,
+							data,
+							version: activeTemplateVersion,
+						});
+						const publishedVersion = {
+							...activeTemplateVersion,
+							...data,
+						};
+						setLastSuccessfulPublishedVersion(publishedVersion);
+						queryClient.setQueryData(
+							templateVersionOptions.queryKey,
+							publishedVersion,
+						);
+					}}
 					isAskingPublishParameters={isPublishingDialogOpen}
 					isPublishing={publishVersionMutation.isPending}
 					publishingError={publishVersionMutation.error}
