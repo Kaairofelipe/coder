@@ -27,6 +27,7 @@ const OPENAI_REASONING_OPTIONS: readonly OpenAIReasoningEffort[] = [
 	"low",
 	"medium",
 	"high",
+	"xhigh",
 ];
 
 const ANTHROPIC_EFFORT_OPTIONS: readonly AnthropicEffort[] = [
@@ -303,14 +304,14 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 	};
 
 	return (
-		<div className="border-solid border-b border-border-default px-3 py-1.5">
+		<div className="px-3 py-1.5">
 			<div className="flex flex-wrap items-end gap-2">
 				<div className="min-w-[180px] flex-1">
 					<div className="mb-0.5 flex items-center justify-between text-2xs text-content-secondary">
 						<span>Model</span>
 						<button
 							type="button"
-							className="text-2xs text-content-link hover:underline cursor-pointer"
+							className="border-none bg-transparent p-0 text-2xs text-content-link hover:underline cursor-pointer"
 							onClick={() => setShowAllModels((prev) => !prev)}
 						>
 							{showAllModels ? "Fewer models" : "All models"}

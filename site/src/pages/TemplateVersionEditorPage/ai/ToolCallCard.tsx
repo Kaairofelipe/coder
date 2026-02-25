@@ -1,3 +1,4 @@
+import { Button } from "components/Button/Button";
 import {
 	AlertTriangleIcon,
 	ChevronDownIcon,
@@ -61,14 +62,19 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 			<button
 				type="button"
 				onClick={() => setExpanded((prev) => !prev)}
-				className="flex w-full items-center gap-2 p-2 text-left"
+				className={cn(
+					"flex w-full items-center gap-2 px-2.5 py-2 text-left",
+					"cursor-pointer bg-transparent transition-colors",
+					"hover:bg-surface-secondary",
+					expanded ? "rounded-t-md" : "rounded-md",
+				)}
 			>
 				{expanded ? (
-					<ChevronDownIcon className="size-4 text-content-secondary" />
+					<ChevronDownIcon className="size-3.5 text-content-secondary" />
 				) : (
-					<ChevronRightIcon className="size-4 text-content-secondary" />
+					<ChevronRightIcon className="size-3.5 text-content-secondary" />
 				)}
-				<Icon className="size-4 text-content-secondary" />
+				<Icon className="size-3.5 text-content-secondary" />
 				<span className="text-xs font-medium text-content-primary">
 					{toolCall.toolName}
 				</span>
@@ -80,24 +86,27 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 			</button>
 
 			{expanded && (
-				<div className="border-solid border-t border-border-default px-3 pb-3 pt-2">
+				<div className="border-solid border-t border-border-default px-2.5 pb-2.5 pt-2">
 					{error && (
-						<div className="mb-2 flex items-start gap-2 rounded-md border border-solid border-border-destructive bg-surface-destructive/30 p-2">
-							<AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-content-destructive" />
-							<p className="text-xs text-content-destructive">{error}</p>
+						<div className="mb-2 flex items-start gap-2 rounded-md bg-surface-destructive/10 p-2 text-xs text-content-destructive">
+							<AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
+							<span>{error}</span>
 						</div>
 					)}
 
 					{toolCall.toolName === "listFiles" && files.length > 0 && (
-						<ul className="m-0 list-none space-y-1 p-0">
+						<ul className="m-0 list-none space-y-0.5 p-0">
 							{files.map((file) => (
 								<li key={file}>
 									<button
 										type="button"
 										onClick={() => onNavigateToFile?.(file)}
 										className={cn(
-											"text-left text-xs text-content-link hover:underline",
-											onNavigateToFile ? "cursor-pointer" : "cursor-default",
+											"border-none bg-transparent p-0 text-left text-xs",
+											"text-content-link hover:underline",
+											onNavigateToFile
+												? "cursor-pointer"
+												: "cursor-default",
 										)}
 										disabled={!onNavigateToFile}
 									>
@@ -110,37 +119,40 @@ export const ToolCallCard: FC<ToolCallCardProps> = ({
 
 					{toolCall.toolName === "readFile" &&
 						readFileContent !== undefined && (
-							<div className="space-y-2">
+							<div className="space-y-1.5">
 								{path && (
 									<button
 										type="button"
 										onClick={() => onNavigateToFile?.(path)}
 										disabled={!onNavigateToFile}
 										className={cn(
-											"text-xs text-content-link hover:underline",
-											onNavigateToFile ? "cursor-pointer" : "cursor-default",
+											"border-none bg-transparent p-0 text-xs",
+											"text-content-link hover:underline",
+											onNavigateToFile
+												? "cursor-pointer"
+												: "cursor-default",
 										)}
 									>
 										{path}
 									</button>
 								)}
-								<pre className="overflow-x-auto rounded-md bg-surface-primary p-2 text-[11px] text-content-primary">
+								<pre className="m-0 overflow-x-auto rounded-md bg-surface-secondary p-2 text-[11px] leading-relaxed text-content-primary">
 									{displayedReadFileLines.join("\n")}
 								</pre>
 								{hasTruncatedReadFile && (
-									<button
-										type="button"
+									<Button
+										variant="subtle"
+										size="xs"
 										onClick={() => setShowAllReadLines((prev) => !prev)}
-										className="text-xs text-content-link hover:underline"
 									>
 										{showAllReadLines ? "Show less" : "Show more"}
-									</button>
+									</Button>
 								)}
 							</div>
 						)}
 
 					{toolCall.state === "pending" && !error && (
-						<p className="text-xs text-content-secondary">
+						<p className="m-0 text-xs text-content-secondary">
 							Waiting for tool result…
 						</p>
 					)}

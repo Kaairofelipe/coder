@@ -11,7 +11,7 @@ export interface AIBridgeModel {
 	provider: AIBridgeProvider;
 }
 
-export type OpenAIReasoningEffort = "low" | "medium" | "high";
+export type OpenAIReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
 export type AnthropicThinking =
 	| { type: "disabled" }

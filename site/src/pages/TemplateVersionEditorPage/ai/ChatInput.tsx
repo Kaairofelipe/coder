@@ -1,3 +1,4 @@
+import { Button } from "components/Button/Button";
 import { SendIcon } from "lucide-react";
 import {
 	type FC,
@@ -66,7 +67,7 @@ export const ChatInput: FC<ChatInputProps> = ({
 	}, [resizeTextarea]);
 
 	return (
-		<div className="flex items-end gap-2 border-solid border-t border-border-default px-3 py-2">
+		<div className="flex items-end gap-1.5 border-solid border-t border-border-default px-3 py-2">
 			<textarea
 				ref={textareaRef}
 				value={value}
@@ -80,25 +81,21 @@ export const ChatInput: FC<ChatInputProps> = ({
 				placeholder={placeholder}
 				className={cn(
 					"max-h-[150px] min-h-[36px] flex-1 resize-none rounded-md",
-					"border border-solid border-border-default bg-surface-primary px-3 py-2",
+					"border border-solid border-border bg-transparent px-3 py-2",
 					"text-sm text-content-primary placeholder:text-content-secondary",
-					"focus:outline-none focus:ring-1 focus:ring-content-link",
+					"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-content-link",
 					"disabled:cursor-not-allowed disabled:opacity-50",
 				)}
 			/>
-			<button
-				type="button"
+			<Button
+				variant="outline"
+				size="icon"
 				onClick={handleSend}
 				disabled={disabled || value.trim().length === 0}
 				aria-label="Send message"
-				className={cn(
-					"shrink-0 rounded-md p-2 text-content-primary",
-					"transition-colors hover:bg-surface-secondary",
-					"disabled:cursor-not-allowed disabled:opacity-50",
-				)}
 			>
-				<SendIcon className="size-4" />
-			</button>
+				<SendIcon />
+			</Button>
 		</div>
 	);
 };

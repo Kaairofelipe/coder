@@ -204,12 +204,12 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 	const resultSuccess = result?.success === true;
 
 	return (
-		<div className="space-y-2 rounded-md border border-solid border-border-default p-2">
+		<div className="space-y-2 rounded-md border border-solid border-border-default p-2.5">
 			<div className="flex items-center gap-2">
 				{toolCall.toolName === "editFile" ? (
-					<FilePenLineIcon className="size-4 text-content-secondary" />
+					<FilePenLineIcon className="size-3.5 text-content-secondary" />
 				) : (
-					<Trash2Icon className="size-4 text-content-destructive" />
+					<Trash2Icon className="size-3.5 text-content-destructive" />
 				)}
 				<button
 					type="button"
@@ -220,7 +220,8 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 					}}
 					disabled={!onNavigateToFile || !hasValidPath}
 					className={cn(
-						"text-left text-xs font-medium text-content-link hover:underline",
+						"border-none bg-transparent p-0 text-left text-xs font-medium",
+						"text-content-link hover:underline",
 						onNavigateToFile && hasValidPath
 							? "cursor-pointer"
 							: "cursor-default",
@@ -231,7 +232,7 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 			</div>
 
 			{!hasValidPath && (
-				<div className="rounded-md border border-solid border-border-destructive bg-surface-destructive/20 p-2 text-xs text-content-destructive">
+				<div className="rounded-md bg-surface-destructive/10 p-2 text-xs text-content-destructive">
 					This tool call is missing a valid file path.
 				</div>
 			)}
@@ -270,19 +271,19 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 							</div>
 						))
 					) : (
-						<p className="p-2 text-xs text-content-secondary">
+						<p className="m-0 p-2 text-xs text-content-secondary">
 							No content changes.
 						</p>
 					)}
 				</div>
 			) : (
-				<div className="rounded-md border border-solid border-border-destructive bg-surface-destructive/20 p-2 text-xs text-content-destructive">
+				<div className="rounded-md bg-surface-destructive/10 p-2 text-xs text-content-destructive">
 					Delete file: {pathLabel}
 				</div>
 			)}
 
 			{isPending && (
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-1.5">
 					<Button variant="outline" size="sm" onClick={onApprove}>
 						<CheckIcon />
 						Approve
@@ -295,22 +296,22 @@ export const EditApprovalCard: FC<EditApprovalCardProps> = ({
 			)}
 
 			{!isPending && toolCall.state === "pending" && (
-				<div className="rounded-md border border-solid border-border-warning bg-surface-warning/20 p-2 text-xs text-content-warning">
-					Waiting for approval.
-				</div>
+				<p className="m-0 text-xs text-content-secondary">
+					Waiting for approval…
+				</p>
 			)}
 
 			{toolCall.state === "result" && resultSuccess && (
-				<div className="rounded-md border border-solid border-success bg-surface-green/20 p-2 text-xs text-content-success">
+				<p className="m-0 text-xs text-content-success">
 					{toolCall.toolName === "deleteFile"
-						? "File deleted successfully."
-						: "Edit applied successfully."}
-				</div>
+						? "File deleted."
+						: "Edit applied."}
+				</p>
 			)}
 
 			{toolCall.state === "result" && resultError && (
-				<div className="flex items-start gap-2 rounded-md border border-solid border-border-destructive bg-surface-destructive/20 p-2 text-xs text-content-destructive">
-					<TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
+				<div className="flex items-start gap-2 rounded-md bg-surface-destructive/10 p-2 text-xs text-content-destructive">
+					<TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
 					<span>{resultError}</span>
 				</div>
 			)}

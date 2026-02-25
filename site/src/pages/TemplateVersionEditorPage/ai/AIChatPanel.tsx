@@ -117,12 +117,12 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 			/>
 
 			<div ref={listRef} className="flex-1 overflow-y-auto px-3 py-2">
-				<div className="flex min-h-full flex-col justify-end gap-2">
+				<div className="flex min-h-full flex-col justify-end gap-3">
 				{messages.length === 0 && (
-					<div className="rounded-md border border-dashed border-border-default p-2 text-xs text-content-secondary">
+					<p className="m-0 text-xs leading-relaxed text-content-secondary">
 						Ask me to inspect or modify your template files. I can read files,
 						propose edits, and ask for approval before changing anything.
-					</div>
+					</p>
 				)}
 
 				{messages.map((message) => (
@@ -140,13 +140,13 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 			</div>
 
 			{isStreaming && (
-				<div className="border-solid border-t border-border-default px-3 py-2 text-xs text-content-secondary">
+				<div className="px-3 py-1.5 text-xs text-content-secondary">
 					Thinking…
 				</div>
 			)}
 
 			{status === "error" && (
-				<div className="border-solid border-t border-border-destructive bg-surface-destructive/20 px-3 py-2 text-xs text-content-destructive">
+				<div className="px-3 py-1.5 text-xs text-content-destructive">
 					Something went wrong while streaming the assistant response. Reset the
 					chat and try again.
 				</div>
