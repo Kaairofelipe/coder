@@ -310,7 +310,17 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 					<div className="mb-0.5 text-2xs text-content-secondary">
 						Model
 					</div>
-					<Select value={selectedModelKey} onValueChange={handleModelChange}>
+					<Select
+						value={selectedModelKey}
+						onValueChange={handleModelChange}
+						onOpenChange={(open) => {
+							// Reset to curated list when the dropdown closes so
+							// the next open always starts compact.
+							if (!open) {
+								setShowAllModels(false);
+							}
+						}}
+					>
 						<SelectTrigger className="h-8 text-xs">
 							<SelectValue placeholder="Select a model" />
 						</SelectTrigger>
@@ -335,19 +345,17 @@ export const ModelConfigBar: FC<ModelConfigBarProps> = ({
 									))}
 								</SelectGroup>
 							)}
-							{/* Separator + toggle rendered inside the dropdown so
-							    it doesn't consume header space. onPointerDown
-							    prevents Radix from closing the popover. */}
-							<div className="border-t border-solid border-border px-2 py-1.5">
-								<button
-									type="button"
-									className="w-full border-none bg-transparent p-0 text-left text-xs text-content-link hover:underline cursor-pointer"
-									onPointerDown={(e) => e.preventDefault()}
-									onClick={() => setShowAllModels((prev) => !prev)}
-								>
-									{showAllModels ? "Show fewer models" : "Show all models"}
-								</button>
-							</div>
+							{/* Toggle at the bottom of the list. Uses
+							    onPointerDown preventDefault to stop Radix from
+							    closing the popover on click. */}
+							<button
+								type="button"
+								className="w-full cursor-pointer border-none bg-transparent px-2 py-1.5 text-left text-xs text-content-link hover:underline"
+								onPointerDown={(e) => e.preventDefault()}
+								onClick={() => setShowAllModels((prev) => !prev)}
+							>
+								{showAllModels ? "Show fewer models" : "Show all models"}
+							</button>
 						</SelectContent>
 					</Select>
 				</div>

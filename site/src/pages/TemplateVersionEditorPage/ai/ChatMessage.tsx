@@ -1,6 +1,7 @@
 import { UserIcon } from "lucide-react";
 import type { FC } from "react";
 import type { FileTree } from "utils/filetree";
+import { MemoizedChatMarkdown } from "./ChatMarkdown";
 import { EditApprovalCard } from "./EditApprovalCard";
 import { ToolCallCard } from "./ToolCallCard";
 import type { PendingToolCall } from "./types";
@@ -31,9 +32,9 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 						<UserIcon className="size-3" />
 						<span>You</span>
 					</div>
-					<p className="m-0 whitespace-pre-wrap break-words">
+					<MemoizedChatMarkdown className="prose-invert">
 						{message.content}
-					</p>
+					</MemoizedChatMarkdown>
 				</div>
 			</div>
 		);
@@ -42,9 +43,9 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 	return (
 		<div className="space-y-2">
 			{message.content.trim().length > 0 && (
-				<p className="m-0 whitespace-pre-wrap break-words text-sm text-content-primary">
+				<MemoizedChatMarkdown>
 					{message.content}
-				</p>
+				</MemoizedChatMarkdown>
 			)}
 
 			{message.toolCalls.map((toolCall) => {
