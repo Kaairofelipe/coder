@@ -127,6 +127,10 @@ const createTemplateAgent = (
 	) {
 		providerOptions.openai = {
 			reasoningEffort: modelConfig.reasoningEffort,
+			// Request reasoning summaries so we can display them
+			// in the chat UI. Without this, OpenAI reasoning
+			// models think internally but don't expose traces.
+			reasoningSummary: "auto",
 		};
 	}
 	if (modelConfig.model.provider === "anthropic" && modelConfig.thinking) {

@@ -1,5 +1,11 @@
-import { BrainIcon, ChevronDownIcon, LoaderIcon } from "lucide-react";
+import {
+	BrainIcon,
+	ChevronDownIcon,
+	ChevronRightIcon,
+	LoaderIcon,
+} from "lucide-react";
 import { type FC, useState } from "react";
+import { cn } from "utils/cn";
 import type { DisplayReasoning } from "./useTemplateAgent";
 
 interface ReasoningBlockProps {
@@ -9,7 +15,8 @@ interface ReasoningBlockProps {
 /**
  * Collapsible block that shows AI reasoning/thinking traces.
  * Collapsed by default to keep the chat scannable — users can
- * expand to see the full chain of thought.
+ * expand to see the full chain of thought. Styled to match
+ * ToolCallCard (borderless row with chevron toggle).
  */
 export const ReasoningBlock: FC<ReasoningBlockProps> = ({ reasoning }) => {
 	const [isOpen, setIsOpen] = useState(false);
@@ -21,28 +28,34 @@ export const ReasoningBlock: FC<ReasoningBlockProps> = ({ reasoning }) => {
 	}
 
 	return (
-		<div className="rounded-md border border-solid border-border/50 text-xs">
+		<div>
 			<button
 				type="button"
 				onClick={() => setIsOpen((prev) => !prev)}
-				className="flex w-full items-center gap-1.5 bg-transparent px-2.5 py-1.5 text-left text-content-secondary transition-colors hover:text-content-primary"
-			>
-				{isStreaming ? (
-					<LoaderIcon className="size-3 animate-spin" />
-				) : (
-					<BrainIcon className="size-3" />
+				className={cn(
+					"flex w-full items-center gap-2 rounded-md px-1 py-1 text-left",
+					"cursor-pointer border-none bg-transparent transition-colors",
+					"hover:bg-surface-secondary",
 				)}
-				<span className="flex-1 font-medium">
+			>
+				{isOpen ? (
+					<ChevronDownIcon className="size-3.5 text-content-secondary" />
+				) : (
+					<ChevronRightIcon className="size-3.5 text-content-secondary" />
+				)}
+				{isStreaming ? (
+					<LoaderIcon className="size-3.5 animate-spin text-content-secondary" />
+				) : (
+					<BrainIcon className="size-3.5 text-content-secondary" />
+				)}
+				<span className="text-xs font-medium text-content-primary">
 					{isStreaming ? "Thinking…" : "Reasoning"}
 				</span>
-				<ChevronDownIcon
-					className={`size-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
-				/>
 			</button>
 
 			{isOpen && (
-				<div className="border-0 border-t border-solid border-border/50 px-2.5 py-2 text-2xs leading-relaxed text-content-secondary">
-					<pre className="m-0 whitespace-pre-wrap break-words font-sans">
+				<div className="ml-3 border-0 border-l-2 border-solid border-border pb-1 pl-3 pt-1">
+					<pre className="m-0 whitespace-pre-wrap break-words font-sans text-2xs leading-relaxed text-content-secondary">
 						{combinedText || "Thinking…"}
 					</pre>
 				</div>
