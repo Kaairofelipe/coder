@@ -1,13 +1,13 @@
 // Shared types for the template editor AI agent.
 
-/** Tool call awaiting user approval (editFile or deleteFile). */
+/** Tool call awaiting user approval (editFile, deleteFile, or buildTemplate). */
 export interface PendingToolCall {
 	/** Approval request ID from the AI SDK. */
 	approvalId: string;
 	/** The tool call ID from the AI SDK. */
 	toolCallId: string;
 	/** Name of the tool being called. */
-	toolName: "editFile" | "deleteFile";
+	toolName: "editFile" | "deleteFile" | "buildTemplate";
 	/** The arguments passed to the tool. */
 	args: Record<string, unknown>;
 }

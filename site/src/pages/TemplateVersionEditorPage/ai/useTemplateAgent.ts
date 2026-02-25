@@ -14,6 +14,7 @@ import type { AIBridgeProvider, AIModelConfig } from "api/queries/aiBridge";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
 import { createTemplateAgentTools } from "./tools";
+import type { BuildOutput, BuildResult } from "./tools";
 import type { AgentStatus, PendingToolCall } from "./types";
 
 /**
@@ -87,14 +88,22 @@ Rules:
 - Use editFile for targeted changes — provide enough context in oldContent
   to uniquely identify the edit location.
 - Keep HCL syntax valid. Use proper Terraform formatting conventions.
-- Explain what you're changing and why before making edits.`;
+- Explain what you're changing and why before making edits.
+- After making changes, use buildTemplate to validate them.
+- If a build fails, use getBuildLogs to understand the error and fix it.
+- When the user asks about build errors, use getBuildLogs to read the logs.`;
 
 const createTemplateAgent = (
 	modelConfig: AIModelConfig,
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
-	onFileEdited?: (path: string) => void,
-	onFileDeleted?: (path: string) => void,
+	callbacks: {
+		onFileEdited?: (path: string) => void;
+		onFileDeleted?: (path: string) => void;
+		onBuildRequested?: () => Promise<void>;
+		waitForBuildComplete?: () => Promise<BuildResult>;
+		getBuildOutput?: () => BuildOutput | undefined;
+	},
 ) => {
 	const providerOptions: NonNullable<
 		ConstructorParameters<typeof ToolLoopAgent>[0]["providerOptions"]
@@ -122,10 +131,7 @@ const createTemplateAgent = (
 			modelConfig.model.id,
 		),
 		instructions: SYSTEM_PROMPT,
-		tools: createTemplateAgentTools(getFileTree, setFileTree, {
-			onFileEdited,
-			onFileDeleted,
-		}),
+		tools: createTemplateAgentTools(getFileTree, setFileTree, callbacks),
 		stopWhen: stepCountIs(MAX_STEPS),
 		providerOptions,
 	});
@@ -139,6 +145,12 @@ interface UseTemplateAgentOptions {
 	onFileEdited?: (path: string) => void;
 	/** Called after a file is deleted so the editor can clear the active path if needed. */
 	onFileDeleted?: (path: string) => void;
+	/** Triggers a template build (uploads files, creates version). */
+	onBuildRequested?: () => Promise<void>;
+	/** Returns a promise that resolves when the current build reaches a terminal state. */
+	waitForBuildComplete?: () => Promise<BuildResult>;
+	/** Returns the current build output snapshot, or undefined if no build has run. */
+	getBuildOutput?: () => BuildOutput | undefined;
 }
 
 export interface DisplayToolCall {
@@ -316,7 +328,11 @@ const collectPendingApprovals = (
 			}
 
 			const toolName = getToolName(part);
-			if (toolName !== "editFile" && toolName !== "deleteFile") {
+			if (
+				toolName !== "editFile" &&
+				toolName !== "deleteFile" &&
+				toolName !== "buildTemplate"
+			) {
 				continue;
 			}
 
@@ -388,6 +404,9 @@ export const useTemplateAgent = ({
 	modelConfig,
 	onFileEdited,
 	onFileDeleted,
+	onBuildRequested,
+	waitForBuildComplete,
+	getBuildOutput,
 }: UseTemplateAgentOptions) => {
 	const [uiMessages, setUIMessages] = useState<UIMessage[]>([]);
 	const [status, setStatus] = useState<AgentStatus>("idle");
@@ -416,13 +435,13 @@ export const useTemplateAgent = ({
 				setStatus(nextStatus);
 			};
 
-			const agent = createTemplateAgent(
-				modelConfig,
-				getFileTree,
-				setFileTree,
+			const agent = createTemplateAgent(modelConfig, getFileTree, setFileTree, {
 				onFileEdited,
 				onFileDeleted,
-			);
+				onBuildRequested,
+				waitForBuildComplete,
+				getBuildOutput,
+			});
 
 			let stream: Awaited<ReturnType<typeof createAgentUIStream>>;
 			try {
@@ -482,11 +501,14 @@ export const useTemplateAgent = ({
 		},
 		[
 			getFileTree,
+			getBuildOutput,
 			modelConfig,
+			onBuildRequested,
 			onFileDeleted,
 			onFileEdited,
 			setConversationMessages,
 			setFileTree,
+			waitForBuildComplete,
 		],
 	);
 

@@ -75,6 +75,7 @@ import {
 } from "utils/filetree";
 import { AIChatPanel } from "./ai/AIChatPanel";
 import { isCuratedModel } from "./ai/ModelConfigBar";
+import type { BuildOutput, BuildResult } from "./ai/tools";
 import { useTemplateAgent } from "./ai/useTemplateAgent";
 import {
 	CreateFileDialog,
@@ -256,6 +257,32 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		[onActivePathChange],
 	);
 
+	// Ref: resolver for the in-flight build promise.
+	const buildCompleteResolverRef = useRef<
+		((result: BuildResult) => void) | null
+	>(null);
+
+	const triggerBuild = useCallback(async () => {
+		await onPreview(getFileTree());
+	}, [onPreview, getFileTree]);
+
+	const waitForBuildComplete = useCallback((): Promise<BuildResult> => {
+		return new Promise<BuildResult>((resolve) => {
+			buildCompleteResolverRef.current = resolve;
+		});
+	}, []);
+
+	const getBuildOutput = useCallback((): BuildOutput | undefined => {
+		const status = templateVersion.job.status;
+		if (!status) {
+			return undefined;
+		}
+		const logText = (buildLogs ?? [])
+			.map((l) => `[${l.log_level}] ${l.stage}: ${l.output}`)
+			.join("\n");
+		return { status, error: templateVersion.job.error, logs: logText };
+	}, [templateVersion.job.status, templateVersion.job.error, buildLogs]);
+
 	// The agent hook lives here (not inside AIChatPanel) so that
 	// chat history survives the panel being toggled open/closed.
 	// The panel merely presents the state this hook manages.
@@ -269,13 +296,44 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 				onActivePathChange(undefined);
 			}
 		},
+		onBuildRequested: triggerBuild,
+		waitForBuildComplete,
+		getBuildOutput,
 	});
+
+	// Resolve the build promise when job status becomes terminal.
+	useEffect(() => {
+		const resolver = buildCompleteResolverRef.current;
+		if (!resolver) {
+			return;
+		}
+		const status = templateVersion.job.status;
+		if (
+			status === "succeeded" ||
+			status === "failed" ||
+			status === "canceled"
+		) {
+			const logText = (buildLogs ?? [])
+				.map((l) => `[${l.log_level}] ${l.stage}: ${l.output}`)
+				.join("\n");
+			resolver({ status, error: templateVersion.job.error, logs: logText });
+			buildCompleteResolverRef.current = null;
+		}
+	}, [templateVersion.job.status, templateVersion.job.error, buildLogs]);
 
 	// Abort any active stream when the page-level component is
 	// unmounted so we don't leave orphaned network requests.
 	useEffect(() => {
 		return () => {
 			templateAgent.stop();
+			if (buildCompleteResolverRef.current) {
+				buildCompleteResolverRef.current({
+					status: "canceled",
+					error: "Agent stopped.",
+					logs: "",
+				});
+				buildCompleteResolverRef.current = null;
+			}
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- run only on unmount
 	}, []);

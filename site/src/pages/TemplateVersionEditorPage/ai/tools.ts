@@ -11,9 +11,24 @@ import {
 } from "utils/filetree";
 import { z } from "zod";
 
+export interface BuildResult {
+	status: "succeeded" | "failed" | "canceled" | "timeout";
+	error?: string;
+	logs: string;
+}
+
+export interface BuildOutput {
+	status: string;
+	error?: string;
+	logs: string;
+}
+
 interface TemplateAgentToolCallbacks {
 	onFileEdited?: (path: string) => void;
 	onFileDeleted?: (path: string) => void;
+	onBuildRequested?: () => Promise<void>;
+	waitForBuildComplete?: () => Promise<BuildResult>;
+	getBuildOutput?: () => BuildOutput | undefined;
 }
 
 /**
@@ -116,6 +131,64 @@ export function createTemplateAgentTools(
 					onFileDeleted?.(path);
 				}
 				return result;
+			},
+		}),
+
+		buildTemplate: tool({
+			description:
+				"Build the current template to validate Terraform configuration. " +
+				"This uploads the files and runs a provisioner job. " +
+				"Returns the build status and logs when complete.",
+			inputSchema: z.object({}),
+			needsApproval: true,
+			execute: async () => {
+				if (!callbacks.onBuildRequested || !callbacks.waitForBuildComplete) {
+					return { error: "Build tools are not available." };
+				}
+				try {
+					await callbacks.onBuildRequested();
+				} catch (err) {
+					const message =
+						err instanceof Error ? err.message : "Failed to trigger build";
+					return { status: "failed" as const, error: message, logs: "" };
+				}
+				const result = await Promise.race([
+					callbacks.waitForBuildComplete(),
+					new Promise<BuildResult>((resolve) =>
+						setTimeout(
+							() =>
+								resolve({
+									status: "timeout",
+									error: "Build timed out after 3 minutes.",
+									logs: "",
+								}),
+							180_000,
+						),
+					),
+				]);
+				return result;
+			},
+		}),
+
+		getBuildLogs: tool({
+			description:
+				"Get the current template build status and logs. " +
+				"Use this to inspect build failures, including when " +
+				"the user triggered a build manually.",
+			inputSchema: z.object({}),
+			execute: async () => {
+				if (!callbacks.getBuildOutput) {
+					return { error: "Build tools are not available." };
+				}
+				const output = callbacks.getBuildOutput();
+				if (!output) {
+					return {
+						status: "none",
+						error: "No build has been run yet.",
+						logs: "",
+					};
+				}
+				return output;
 			},
 		}),
 	};

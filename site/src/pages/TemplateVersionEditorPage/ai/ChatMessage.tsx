@@ -1,6 +1,7 @@
 import { UserIcon } from "lucide-react";
 import type { FC } from "react";
 import type { FileTree } from "utils/filetree";
+import { BuildApprovalCard } from "./BuildApprovalCard";
 import { MemoizedChatMarkdown } from "./ChatMarkdown";
 import { EditApprovalCard } from "./EditApprovalCard";
 import { ToolCallCard } from "./ToolCallCard";
@@ -52,6 +53,8 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 				const isEditAction =
 					toolCall.toolName === "editFile" ||
 					toolCall.toolName === "deleteFile";
+				const isBuildAction = toolCall.toolName === "buildTemplate";
+
 				if (isEditAction) {
 					const isPending =
 						pendingApproval?.toolCallId === toolCall.toolCallId &&
@@ -65,6 +68,21 @@ export const ChatMessage: FC<ChatMessageProps> = ({
 							onReject={onReject}
 							onNavigateToFile={onNavigateToFile}
 							getFileTree={getFileTree}
+						/>
+					);
+				}
+
+				if (isBuildAction) {
+					const isPending =
+						pendingApproval?.toolCallId === toolCall.toolCallId &&
+						toolCall.state === "pending";
+					return (
+						<BuildApprovalCard
+							key={toolCall.toolCallId}
+							toolCall={toolCall}
+							isPending={isPending}
+							onApprove={onApprove}
+							onReject={onReject}
 						/>
 					);
 				}
