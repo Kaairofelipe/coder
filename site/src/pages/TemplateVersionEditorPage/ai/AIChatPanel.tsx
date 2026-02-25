@@ -88,7 +88,7 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 	const inputDisabled = isStreaming || status === "awaiting_approval";
 
 	return (
-		<div className="flex h-full flex-col border-solid border-l border-border-default bg-surface-primary">
+		<div className="flex h-full flex-col border-solid border-0 border-l border-t border-border bg-surface-primary">
 			<div className="flex items-center justify-between px-3 py-2">
 				<div className="flex items-center gap-2 text-sm font-medium text-content-primary">
 					<SparklesIcon className="size-4 text-content-link" />
