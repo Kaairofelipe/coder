@@ -169,10 +169,13 @@ describe("publishTemplate tool", () => {
 			message: "changelog entry",
 			isActiveVersion: false,
 		});
-		expect(onPublishRequested).toHaveBeenCalledWith({
-			name: "my-version",
-			message: "changelog entry",
-			isActiveVersion: false,
-		});
+		expect(onPublishRequested).toHaveBeenCalledWith(
+			{
+				name: "my-version",
+				message: "changelog entry",
+				isActiveVersion: false,
+			},
+			{ skipDirtyCheck: true },
+		);
 	});
 });

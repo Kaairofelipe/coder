@@ -14,7 +14,13 @@ import { API } from "api/api";
 import type { AIBridgeProvider, AIModelConfig } from "api/queries/aiBridge";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { FileTree } from "utils/filetree";
-import type { BuildOutput, BuildResult, PublishResult } from "./tools";
+import type {
+	BuildOutput,
+	BuildResult,
+	PublishRequestData,
+	PublishRequestOptions,
+	PublishResult,
+} from "./tools";
 import { createTemplateAgentTools } from "./tools";
 import type { AgentStatus, PendingToolCall } from "./types";
 
@@ -111,11 +117,10 @@ const createTemplateAgent = (
 		onBuildRequested?: () => Promise<void>;
 		waitForBuildComplete?: () => Promise<BuildResult>;
 		getBuildOutput?: () => BuildOutput | undefined;
-		onPublishRequested?: (data: {
-			name?: string;
-			message?: string;
-			isActiveVersion?: boolean;
-		}) => Promise<PublishResult>;
+		onPublishRequested?: (
+			data: PublishRequestData,
+			options?: PublishRequestOptions,
+		) => Promise<PublishResult>;
 	},
 ) => {
 	const providerOptions: NonNullable<
@@ -169,11 +174,10 @@ interface UseTemplateAgentOptions {
 	/** Returns the current build output snapshot, or undefined if no build has run. */
 	getBuildOutput?: () => BuildOutput | undefined;
 	/** Publishes the current template version. Returns success/error. */
-	onPublishRequested?: (data: {
-		name?: string;
-		message?: string;
-		isActiveVersion?: boolean;
-	}) => Promise<PublishResult>;
+	onPublishRequested?: (
+		data: PublishRequestData,
+		options?: PublishRequestOptions,
+	) => Promise<PublishResult>;
 }
 
 export interface DisplayToolCall {
@@ -533,8 +537,8 @@ export const useTemplateAgent = ({
 					? () => toolCallbacksRef.current.getBuildOutput?.()
 					: undefined,
 				onPublishRequested: toolCallbacksRef.current.onPublishRequested
-					? (data) =>
-							toolCallbacksRef.current.onPublishRequested?.(data) ??
+					? (data, options) =>
+							toolCallbacksRef.current.onPublishRequested?.(data, options) ??
 							Promise.resolve<PublishResult>({
 								success: false,
 								error: "Publish is not available.",

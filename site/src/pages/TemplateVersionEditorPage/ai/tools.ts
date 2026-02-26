@@ -29,17 +29,26 @@ export interface PublishResult {
 	versionName?: string;
 }
 
+export interface PublishRequestData {
+	name?: string;
+	message?: string;
+	isActiveVersion?: boolean;
+}
+
+export interface PublishRequestOptions {
+	skipDirtyCheck?: boolean;
+}
+
 interface TemplateAgentToolCallbacks {
 	onFileEdited?: (path: string) => void;
 	onFileDeleted?: (path: string) => void;
 	onBuildRequested?: () => Promise<void>;
 	waitForBuildComplete?: () => Promise<BuildResult>;
 	getBuildOutput?: () => BuildOutput | undefined;
-	onPublishRequested?: (data: {
-		name?: string;
-		message?: string;
-		isActiveVersion?: boolean;
-	}) => Promise<PublishResult>;
+	onPublishRequested?: (
+		data: PublishRequestData,
+		options?: PublishRequestOptions,
+	) => Promise<PublishResult>;
 }
 
 /**
@@ -232,11 +241,14 @@ export function createTemplateAgentTools(
 					return { success: false, error: "Publish is not available." };
 				}
 				try {
-					return await callbacks.onPublishRequested({
-						name,
-						message,
-						isActiveVersion,
-					});
+					return await callbacks.onPublishRequested(
+						{
+							name,
+							message,
+							isActiveVersion,
+						},
+						{ skipDirtyCheck: true },
+					);
 				} catch (err) {
 					const errorMessage =
 						err instanceof Error ? err.message : "Failed to publish";

@@ -75,7 +75,13 @@ import {
 } from "utils/filetree";
 import { AIChatPanel } from "./ai/AIChatPanel";
 import { getDefaultModelConfig, isCuratedModel } from "./ai/ModelConfigBar";
-import type { BuildOutput, BuildResult, PublishResult } from "./ai/tools";
+import type {
+	BuildOutput,
+	BuildResult,
+	PublishRequestData,
+	PublishRequestOptions,
+	PublishResult,
+} from "./ai/tools";
 import { useTemplateAgent } from "./ai/useTemplateAgent";
 import {
 	CreateFileDialog,
@@ -294,12 +300,11 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	}, [templateVersion.job.status, templateVersion.job.error, buildLogs]);
 
 	const handlePublish = useCallback(
-		async (data: {
-			name?: string;
-			message?: string;
-			isActiveVersion?: boolean;
-		}): Promise<PublishResult> => {
-			if (dirty && templateVersion.job.status !== "succeeded") {
+		async (
+			data: PublishRequestData,
+			options?: PublishRequestOptions,
+		): Promise<PublishResult> => {
+			if (dirty && !options?.skipDirtyCheck) {
 				return {
 					success: false,
 					error: "There are unsaved changes. Build the template first.",
