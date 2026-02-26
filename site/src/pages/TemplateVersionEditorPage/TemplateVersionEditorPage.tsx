@@ -30,6 +30,7 @@ import { pageTitle } from "utils/page";
 import { TarReader, TarWriter } from "utils/tar";
 import { createTemplateVersionFileTree } from "utils/templateVersion";
 import { TemplateVersionEditor } from "./TemplateVersionEditor";
+import type { PublishVersionData } from "./types";
 
 const TemplateVersionEditorPage: FC = () => {
 	const getLink = useLinks();
@@ -116,6 +117,27 @@ const TemplateVersionEditorPage: FC = () => {
 		navigateToVersion(newVersion);
 	};
 
+	const doPublish = async ({
+		isActiveVersion,
+		...data
+	}: PublishVersionData) => {
+		if (!activeTemplateVersion) {
+			throw new Error("Cannot publish a template version before it loads.");
+		}
+		await publishVersionMutation.mutateAsync({
+			isActiveVersion,
+			data,
+			version: activeTemplateVersion,
+		});
+		const publishedVersion = {
+			...activeTemplateVersion,
+			...data,
+		};
+		setLastSuccessfulPublishedVersion(publishedVersion);
+		queryClient.setQueryData(templateVersionOptions.queryKey, publishedVersion);
+		return publishedVersion;
+	};
+
 	// Provisioner Tags
 	const [provisionerTags, setProvisionerTags] = useState<
 		Record<string, string>
@@ -165,39 +187,13 @@ const TemplateVersionEditorPage: FC = () => {
 					onCancelPublish={() => {
 						setIsPublishingDialogOpen(false);
 					}}
-					onConfirmPublish={async ({ isActiveVersion, ...data }) => {
-						await publishVersionMutation.mutateAsync({
-							isActiveVersion,
-							data,
-							version: activeTemplateVersion,
-						});
-						const publishedVersion = {
-							...activeTemplateVersion,
-							...data,
-						};
+					onConfirmPublish={async (data) => {
+						const publishedVersion = await doPublish(data);
 						setIsPublishingDialogOpen(false);
-						setLastSuccessfulPublishedVersion(publishedVersion);
-						queryClient.setQueryData(
-							templateVersionOptions.queryKey,
-							publishedVersion,
-						);
 						navigateToVersion(publishedVersion);
 					}}
-					onPublishVersion={async ({ isActiveVersion, ...data }) => {
-						await publishVersionMutation.mutateAsync({
-							isActiveVersion,
-							data,
-							version: activeTemplateVersion,
-						});
-						const publishedVersion = {
-							...activeTemplateVersion,
-							...data,
-						};
-						setLastSuccessfulPublishedVersion(publishedVersion);
-						queryClient.setQueryData(
-							templateVersionOptions.queryKey,
-							publishedVersion,
-						);
+					onPublishVersion={async (data) => {
+						await doPublish(data);
 					}}
 					isAskingPublishParameters={isPublishingDialogOpen}
 					isPublishing={publishVersionMutation.isPending}
