@@ -197,6 +197,8 @@ func TestServeHTTPStripsCoderTokenHeader(t *testing.T) {
 	req.Header.Set(agplaibridge.HeaderCoderAuth, "coder-token")
 	req.Header.Set(codersdk.SessionTokenHeader, "session-key")
 	req.AddCookie(&http.Cookie{Name: codersdk.SessionTokenCookie, Value: "session-cookie"})
+	// Also add a non-auth cookie that should still be stripped.
+	req.AddCookie(&http.Cookie{Name: "_csrf", Value: "csrf-token"})
 	req.Header.Set("Authorization", "Bearer some-token")
 	req.Header.Set("X-Api-Key", "some-api-key")
 
@@ -213,11 +215,9 @@ func TestServeHTTPStripsCoderTokenHeader(t *testing.T) {
 	require.Empty(t, mockHandler.headersReceived.Get(codersdk.SessionTokenHeader),
 		"Coder-Session-Token should be removed before forwarding to handler")
 
-	// Verify session cookie was stripped.
-	for _, c := range mockHandler.cookiesReceived {
-		require.NotEqual(t, codersdk.SessionTokenCookie, c.Name,
-			"coder_session_token cookie should be removed before forwarding")
-	}
+	// Verify all cookies were stripped.
+	require.Empty(t, mockHandler.cookiesReceived,
+		"all cookies should be removed before forwarding to handler")
 
 	// Verify other headers were preserved.
 	require.Equal(t, "Bearer some-token", mockHandler.headersReceived.Get("Authorization"))

@@ -45,21 +45,12 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove Coder auth credentials so they are not forwarded upstream.
+	// Strip Coder auth data so it is not forwarded upstream: X-Coder-Token,
+	// Coder-Session-Token, and all cookies (including browser session/CSRF
+	// cookies).
 	r.Header.Del(agplaibridge.HeaderCoderAuth)
 	r.Header.Del(codersdk.SessionTokenHeader)
-
-	// Strip Coder session cookie so it's not forwarded upstream.
-	filtered := make([]*http.Cookie, 0, len(r.Cookies()))
-	for _, c := range r.Cookies() {
-		if c.Name != codersdk.SessionTokenCookie {
-			filtered = append(filtered, c)
-		}
-	}
 	r.Header.Del("Cookie")
-	for _, c := range filtered {
-		r.AddCookie(c)
-	}
 
 	client, err := s.Client()
 	if err != nil {
