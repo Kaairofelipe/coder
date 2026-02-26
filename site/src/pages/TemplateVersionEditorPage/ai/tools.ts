@@ -156,14 +156,9 @@ export function createTemplateAgentTools(
 				if (!callbacks.onBuildRequested || !callbacks.waitForBuildComplete) {
 					return { error: "Build tools are not available." };
 				}
-				try {
-					await callbacks.onBuildRequested();
-				} catch (err) {
-					const message =
-						err instanceof Error ? err.message : "Failed to trigger build";
-					return { status: "failed" as const, error: message, logs: "" };
-				}
-				const result = await Promise.race([
+				// Register the build waiter before triggering the build so
+				// a fast-finishing build does not race past the resolver.
+				const buildPromise = Promise.race([
 					callbacks.waitForBuildComplete(),
 					new Promise<BuildResult>((resolve) =>
 						setTimeout(
@@ -177,6 +172,14 @@ export function createTemplateAgentTools(
 						),
 					),
 				]);
+				try {
+					await callbacks.onBuildRequested();
+				} catch (err) {
+					const message =
+						err instanceof Error ? err.message : "Failed to trigger build";
+					return { status: "failed" as const, error: message, logs: "" };
+				}
+				const result = await buildPromise;
 				return result;
 			},
 		}),
