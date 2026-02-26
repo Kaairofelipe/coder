@@ -5922,7 +5922,7 @@ const docTemplate = `{
                         "CoderSessionToken": []
                     }
                 ],
-                "consumes": [
+                "produces": [
                     "application/json"
                 ],
                 "tags": [
@@ -5964,7 +5964,7 @@ const docTemplate = `{
                         "CoderSessionToken": []
                     }
                 ],
-                "consumes": [
+                "produces": [
                     "application/json"
                 ],
                 "tags": [
