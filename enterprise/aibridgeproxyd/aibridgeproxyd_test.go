@@ -36,6 +36,10 @@ import (
 	"github.com/coder/coder/v2/testutil"
 )
 
+// minimalUserJSON is a minimal valid User JSON for codersdk.Client.User token validation.
+// Used by mock Coder API handlers for /api/v2/users/me.
+const minimalUserJSON = `{"id":"00000000-0000-0000-0000-000000000000","username":"test","email":"test@test.com","created_at":"2020-01-01T00:00:00Z","updated_at":"2020-01-01T00:00:00Z","status":"active","organization_ids":[],"roles":[]}`
+
 var (
 	// testCAOnce ensures the shared CA is generated exactly once.
 	// sync.Once guarantees single execution even with parallel tests.
@@ -837,8 +841,18 @@ func TestProxy_CertCaching(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			// Create a mock aibridged server for allowlisted (MITM'd) requests.
+			// Create a mock Coder server for token validation and aibridged.
 			aibridgedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v2/users/me" && r.Method == http.MethodGet {
+					if r.Header.Get("Coder-Session-Token") == "test-token" {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusOK)
+						_, _ = w.Write([]byte(minimalUserJSON))
+						return
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
 				w.WriteHeader(http.StatusOK)
 			}))
 			t.Cleanup(func() { aibridgedServer.Close() })
@@ -1137,15 +1151,27 @@ func TestProxy_MITM(t *testing.T) {
 			// Track what aibridged receives.
 			var receivedPath, receivedCoderToken, receivedRequestID string
 
-			// Create a mock aibridged server that captures requests.
-			aibridgedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Create a mock Coder server that handles token validation and aibridged.
+			coderServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v2/users/me" && r.Method == http.MethodGet {
+					// Token validation for tunneled CONNECT requests.
+					if r.Header.Get("Coder-Session-Token") == "test-token" {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusOK)
+						_, _ = w.Write([]byte(minimalUserJSON))
+						return
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				// aibridged requests.
 				receivedPath = r.URL.Path
 				receivedCoderToken = r.Header.Get(agplaibridge.HeaderCoderAuth)
 				receivedRequestID = r.Header.Get(aibridgeproxyd.HeaderAIBridgeRequestID)
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("hello from aibridged"))
 			}))
-			t.Cleanup(func() { aibridgedServer.Close() })
+			t.Cleanup(func() { coderServer.Close() })
 
 			// Create a mock target server for tunneled tests.
 			tunneledServer, tunneledURL := newTargetServer(t, func(w http.ResponseWriter, _ *http.Request) {
@@ -1165,9 +1191,9 @@ func TestProxy_MITM(t *testing.T) {
 				domainAllowlist = []string{tunneledURL.Hostname()}
 			}
 
-			// Start the proxy server pointing to our mock aibridged.
+			// Start the proxy server pointing to our mock Coder server.
 			srv := newTestProxy(t,
-				withCoderAccessURL(aibridgedServer.URL),
+				withCoderAccessURL(coderServer.URL),
 				withAllowedPorts(allowedPorts...),
 				withDomainAllowlist(domainAllowlist...),
 				// Use default provider mapping to test real AI provider routing.
@@ -1242,6 +1268,124 @@ func TestProxy_MITM(t *testing.T) {
 
 				// Verify tunneled counter was not set.
 				require.False(t, testutil.PromCounterGathered(t, gatheredMetrics, "connect_sessions_total", aibridgeproxyd.RequestTypeTunneled))
+			}
+		})
+	}
+}
+
+// TestProxy_Tunneled verifies that requests to non-allowlisted domains are
+// tunneled directly to the destination without MITM, and never reach aibridged.
+// The Coder token is validated against the Coder API before allowing the tunnel.
+func TestProxy_Tunneled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		domainAllowlist []string
+		proxyAuth       string
+		validToken      string // token that the mock Coder API accepts
+		expectSuccess   bool
+	}{
+		{
+			name:            "TunneledToArbitraryHost",
+			domainAllowlist: []string{aibridgeproxyd.HostAnthropic, aibridgeproxyd.HostOpenAI},
+			proxyAuth:       makeProxyAuthHeader("test-token"),
+			validToken:      "test-token",
+			expectSuccess:   true,
+		},
+		{
+			name:            "TunneledWithoutProxyAuth",
+			domainAllowlist: []string{aibridgeproxyd.HostAnthropic},
+			proxyAuth:       "",
+			validToken:      "test-token",
+			expectSuccess:   false,
+		},
+		{
+			name:            "TunneledWithInvalidToken",
+			domainAllowlist: []string{aibridgeproxyd.HostAnthropic},
+			proxyAuth:       makeProxyAuthHeader("invalid-token"),
+			validToken:      "test-token",
+			expectSuccess:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			reg := prometheus.NewRegistry()
+			metrics := aibridgeproxyd.NewMetrics(reg)
+
+			// Mock Coder API that validates tokens via GET /api/v2/users/me.
+			coderServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v2/users/me" && r.Method == http.MethodGet {
+					token := r.Header.Get("Coder-Session-Token")
+					if token == tt.validToken {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusOK)
+						_, _ = w.Write([]byte(minimalUserJSON))
+						return
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusNotFound)
+			}))
+			t.Cleanup(func() { coderServer.Close() })
+
+			var receivedPath string
+			aibridgedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedPath = r.URL.Path
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("hello from aibridged"))
+			}))
+			t.Cleanup(func() { aibridgedServer.Close() })
+
+			tunneledServer, tunneledURL := newTargetServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("hello from tunneled"))
+			})
+
+			srv := newTestProxy(t,
+				withCoderAccessURL(coderServer.URL),
+				withAllowedPorts(tunneledURL.Port()),
+				withDomainAllowlist(tt.domainAllowlist...),
+				withAIBridgeProviderFromHost(nil),
+				withMetrics(metrics),
+			)
+
+			targetURL, err := url.JoinPath(tunneledURL.String(), "/some/path")
+			require.NoError(t, err)
+
+			certPool := x509.NewCertPool()
+			certPool.AddCert(tunneledServer.Certificate())
+
+			if tt.expectSuccess {
+				client := newProxyClient(t, srv, tt.proxyAuth, certPool)
+				req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, targetURL, nil)
+				require.NoError(t, err)
+
+				resp, err := client.Do(req)
+				require.NoError(t, err)
+				defer resp.Body.Close()
+
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+
+				require.Equal(t, http.StatusOK, resp.StatusCode)
+				require.Equal(t, "hello from tunneled", string(body))
+				require.Empty(t, receivedPath, "aibridged should not receive tunneled requests")
+
+				gatheredMetrics, err := reg.Gather()
+				require.NoError(t, err)
+				require.True(t, testutil.PromCounterHasValue(t, gatheredMetrics, 1, "connect_sessions_total", aibridgeproxyd.RequestTypeTunneled))
+				require.False(t, testutil.PromCounterGathered(t, gatheredMetrics, "connect_sessions_total", aibridgeproxyd.RequestTypeMITM))
+			} else {
+				// Use raw CONNECT to verify 407, since Go's HTTP client returns
+				// an error instead of the response when CONNECT fails.
+				resp := sendConnect(t, srv.Addr(), tunneledURL.Host, tt.proxyAuth)
+				defer resp.Body.Close()
+				require.Equal(t, http.StatusProxyAuthRequired, resp.StatusCode)
 			}
 		})
 	}
@@ -1561,6 +1705,17 @@ func TestUpstreamProxy(t *testing.T) {
 			//   - For tunneled requests, traffic should NOT reach this server.
 			//   - For MITM requests, aiproxy rewrites the URL and forwards here.
 			aibridgeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v2/users/me" && r.Method == http.MethodGet {
+					// Token validation for tunneled CONNECT requests.
+					if r.Header.Get("Coder-Session-Token") == "test-coder-token" {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusOK)
+						_, _ = w.Write([]byte(minimalUserJSON))
+						return
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
 				aibridgeReceived = true
 				aibridgePath = r.URL.Path
 				aibridgeCoderToken = r.Header.Get(agplaibridge.HeaderCoderAuth)

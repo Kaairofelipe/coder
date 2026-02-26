@@ -27,6 +27,7 @@ import (
 	"cdr.dev/slog/v3"
 	"github.com/coder/aibridge"
 	agplaibridge "github.com/coder/coder/v2/coderd/aibridge"
+	"github.com/coder/coder/v2/codersdk"
 )
 
 // Known AI provider hosts.
@@ -73,6 +74,9 @@ type Server struct {
 	caCert []byte
 	// Metrics is the Prometheus metrics for the proxy. If nil, metrics are disabled.
 	metrics *Metrics
+	// coderHTTPClient is used to validate Coder tokens against the Coder API
+	// for tunneled CONNECT requests.
+	coderHTTPClient *http.Client
 }
 
 // requestContext holds metadata propagated through the proxy request/response chain.
@@ -267,6 +271,18 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 		proxy.ConnectDial = proxy.NewConnectDialToProxyWithHandler(opts.UpstreamProxy, connectReqHandler)
 	}
 
+	// HTTP client for validating Coder tokens against the Coder API.
+	// Uses direct connection (no proxy) to avoid circular dependency.
+	coderHTTPClient := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				RootCAs:    rootCAs,
+			},
+		},
+	}
+
 	srv := &Server{
 		ctx:                      ctx,
 		logger:                   logger,
@@ -275,6 +291,7 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 		aibridgeProviderFromHost: aibridgeProviderFromHost,
 		caCert:                   certPEM,
 		metrics:                  opts.Metrics,
+		coderHTTPClient:          coderHTTPClient,
 	}
 
 	// Reject CONNECT requests to non-standard ports.
@@ -628,16 +645,46 @@ func defaultAIBridgeProvider(host string) string {
 
 // tunneledMiddleware is a CONNECT middleware that handles tunneled (non-allowlisted)
 // connections. These connections are not MITM'd and are tunneled directly to their
-// destination. This middleware records metrics for tunneled CONNECT sessions.
-func (s *Server) tunneledMiddleware(host string, _ *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
-	// Record tunneled CONNECT session establishment.
+// destination. The Coder token from Proxy-Authorization is validated against the
+// Coder API before allowing the tunnel.
+func (s *Server) tunneledMiddleware(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
+	logger := s.logger.With(slog.F("host", host))
+
+	proxyAuth := ctx.Req.Header.Get("Proxy-Authorization")
+	coderToken := extractCoderTokenFromProxyAuth(proxyAuth)
+
+	if coderToken == "" {
+		hasAuth := proxyAuth != ""
+		logger.Warn(s.ctx, "rejecting tunneled CONNECT request",
+			slog.F("reason", map[bool]string{true: "invalid_credentials", false: "missing_credentials"}[hasAuth]),
+		)
+		ctx.Resp = newProxyAuthRequiredResponse(ctx.Req) //nolint:bodyclose // Response body is written by goproxy to the client
+		return goproxy.RejectConnect, host
+	}
+
+	if err := s.validateCoderToken(ctx.Req.Context(), coderToken); err != nil {
+		logger.Warn(s.ctx, "rejecting tunneled CONNECT request: token validation failed",
+			slog.Error(err),
+		)
+		ctx.Resp = newProxyAuthRequiredResponse(ctx.Req) //nolint:bodyclose // Response body is written by goproxy to the client
+		return goproxy.RejectConnect, host
+	}
+
 	if s.metrics != nil {
 		s.metrics.ConnectSessionsTotal.WithLabelValues(RequestTypeTunneled).Inc()
 	}
 
-	// Return OkConnect to allow the tunnel to be established.
-	// goproxy will create a tunnel between the client and the destination.
 	return goproxy.OkConnect, host
+}
+
+// validateCoderToken checks the token against the Coder API. Returns nil if valid.
+func (s *Server) validateCoderToken(ctx context.Context, token string) error {
+	client := codersdk.New(s.coderAccessURL,
+		codersdk.WithSessionToken(token),
+		codersdk.WithHTTPClient(s.coderHTTPClient),
+	)
+	_, err := client.User(ctx, codersdk.Me)
+	return err
 }
 
 // handleRequest intercepts HTTP requests after MITM decryption.
