@@ -381,14 +381,19 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		if (
 			status === "succeeded" ||
 			status === "failed" ||
-			status === "canceled"
+			status === "canceled" ||
+			status === "unknown"
 		) {
 			const logText = (buildLogs ?? [])
 				.map((l) => `[${l.log_level}] ${l.stage}: ${l.output}`)
 				.join("\n");
 			pending.resolve({
-				status,
-				error: templateVersion.job.error,
+				status: status === "unknown" ? "failed" : status,
+				error:
+					status === "unknown"
+						? (templateVersion.job.error ??
+								"Build ended with an unknown status.")
+						: templateVersion.job.error,
 				logs: logText,
 			});
 			buildCompleteResolverRef.current = null;

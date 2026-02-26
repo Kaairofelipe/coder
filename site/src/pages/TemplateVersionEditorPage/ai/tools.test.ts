@@ -161,7 +161,7 @@ describe("publishTemplate tool", () => {
 		});
 	});
 
-	it("passes name, message, and isActiveVersion through to callback", async () => {
+	it("passes publish args through without skipDirtyCheck before a build", async () => {
 		const onPublishRequested = vi.fn().mockResolvedValue({ success: true });
 		const tools = makeTools({ onPublishRequested });
 		await executePublish(tools, {
@@ -174,6 +174,33 @@ describe("publishTemplate tool", () => {
 				name: "my-version",
 				message: "changelog entry",
 				isActiveVersion: false,
+			},
+			undefined,
+		);
+	});
+
+	it("passes skipDirtyCheck when this run completed a successful build", async () => {
+		const onPublishRequested = vi.fn().mockResolvedValue({ success: true });
+		const tools = makeTools({
+			onBuildRequested: vi.fn().mockResolvedValue(undefined),
+			waitForBuildComplete: vi
+				.fn()
+				.mockResolvedValue({ status: "succeeded", logs: "" }),
+			onPublishRequested,
+		});
+
+		await executeBuild(tools);
+		await executePublish(tools, {
+			name: "built-version",
+			message: "after build",
+			isActiveVersion: true,
+		});
+
+		expect(onPublishRequested).toHaveBeenCalledWith(
+			{
+				name: "built-version",
+				message: "after build",
+				isActiveVersion: true,
 			},
 			{ skipDirtyCheck: true },
 		);

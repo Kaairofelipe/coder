@@ -62,6 +62,9 @@ export function createTemplateAgentTools(
 	callbacks: TemplateAgentToolCallbacks = {},
 ) {
 	const { onFileEdited, onFileDeleted } = callbacks;
+	// Track whether the current tool loop has produced a successful build
+	// for the latest in-memory file tree.
+	let hasBuiltInCurrentRun = false;
 
 	return {
 		listFiles: tool({
@@ -130,6 +133,7 @@ export function createTemplateAgentTools(
 					newContent,
 				});
 				if (result.success) {
+					hasBuiltInCurrentRun = false;
 					onFileEdited?.(path);
 				}
 				return result;
@@ -148,6 +152,7 @@ export function createTemplateAgentTools(
 			execute: async ({ path }) => {
 				const result = executeDeleteFile(getFileTree, setFileTree, { path });
 				if (result.success) {
+					hasBuiltInCurrentRun = false;
 					onFileDeleted?.(path);
 				}
 				return result;
@@ -184,11 +189,13 @@ export function createTemplateAgentTools(
 				try {
 					await callbacks.onBuildRequested();
 				} catch (err) {
+					hasBuiltInCurrentRun = false;
 					const message =
 						err instanceof Error ? err.message : "Failed to trigger build";
 					return { status: "failed" as const, error: message, logs: "" };
 				}
 				const result = await buildPromise;
+				hasBuiltInCurrentRun = result.status === "succeeded";
 				return result;
 			},
 		}),
@@ -247,7 +254,7 @@ export function createTemplateAgentTools(
 							message,
 							isActiveVersion,
 						},
-						{ skipDirtyCheck: true },
+						hasBuiltInCurrentRun ? { skipDirtyCheck: true } : undefined,
 					);
 				} catch (err) {
 					const errorMessage =
