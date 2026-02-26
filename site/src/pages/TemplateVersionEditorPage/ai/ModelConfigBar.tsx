@@ -96,7 +96,7 @@ const getThinkingMode = (
 	return "budget";
 };
 
-const getDefaultModelConfig = (model: AIBridgeModel): AIModelConfig => {
+export const getDefaultModelConfig = (model: AIBridgeModel): AIModelConfig => {
 	const config: AIModelConfig = { model };
 
 	if (model.provider === "openai" && isOpenAIReasoningModel(model.id)) {

@@ -74,7 +74,7 @@ import {
 	updateFile,
 } from "utils/filetree";
 import { AIChatPanel } from "./ai/AIChatPanel";
-import { isCuratedModel } from "./ai/ModelConfigBar";
+import { getDefaultModelConfig, isCuratedModel } from "./ai/ModelConfigBar";
 import type { BuildOutput, BuildResult, PublishResult } from "./ai/tools";
 import { useTemplateAgent } from "./ai/useTemplateAgent";
 import {
@@ -220,7 +220,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const defaultAIModel = selectDefaultAIModel(aiModels);
 	useEffect(() => {
 		if (aiModelConfig === undefined && defaultAIModel !== undefined) {
-			setAIModelConfig({ model: defaultAIModel });
+			setAIModelConfig(getDefaultModelConfig(defaultAIModel));
 		}
 	}, [aiModelConfig, defaultAIModel]);
 	const aiAvailable = aiExperimentEnabled && aiModelConfig !== undefined;
