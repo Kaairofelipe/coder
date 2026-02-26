@@ -40,18 +40,18 @@ export const AIChatPanel: FC<AIChatPanelProps> = ({
 
 	const listRef = useRef<HTMLDivElement>(null);
 
-	const messageCount = messages.length;
-
+	// Use `messages` directly so the effect re-fires as streaming
+	// content grows (the array reference changes on each update).
 	useEffect(() => {
 		const node = listRef.current;
 		if (!node) {
 			return;
 		}
-		if (messageCount === 0 && status === "idle") {
+		if (messages.length === 0 && status === "idle") {
 			return;
 		}
 		node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
-	}, [messageCount, status]);
+	}, [messages, status]);
 
 	const inputDisabled = isStreaming || status === "awaiting_approval";
 
