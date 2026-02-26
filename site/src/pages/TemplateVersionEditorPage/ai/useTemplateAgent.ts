@@ -111,6 +111,7 @@ const createTemplateAgent = (
 	modelConfig: AIModelConfig,
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
+	hasBuiltInCurrentRunRef: { current: boolean },
 	callbacks: {
 		onFileEdited?: (path: string) => void;
 		onFileDeleted?: (path: string) => void;
@@ -153,7 +154,12 @@ const createTemplateAgent = (
 			modelConfig.model.id,
 		),
 		instructions: SYSTEM_PROMPT,
-		tools: createTemplateAgentTools(getFileTree, setFileTree, callbacks),
+		tools: createTemplateAgentTools(
+			getFileTree,
+			setFileTree,
+			hasBuiltInCurrentRunRef,
+			callbacks,
+		),
 		stopWhen: stepCountIs(MAX_STEPS),
 		providerOptions,
 	});
@@ -476,6 +482,11 @@ export const useTemplateAgent = ({
 	const messageCounter = useRef(0);
 	const abortRef = useRef<AbortController | null>(null);
 
+	// Tracks whether a successful build happened for the current chat
+	// session so publish can skip the dirty-file check after approval
+	// pauses resume the stream.
+	const hasBuiltInCurrentRunRef = useRef(false);
+
 	// Ref wrappers for tool callbacks that may change between steps of a
 	// multi-step stream (e.g., dirty/build-status changes after an edit).
 	// Dereferencing through the ref ensures each tool invocation reads
@@ -517,34 +528,42 @@ export const useTemplateAgent = ({
 				setStatus(nextStatus);
 			};
 
-			const agent = createTemplateAgent(modelConfig, getFileTree, setFileTree, {
-				onFileEdited: (path) => toolCallbacksRef.current.onFileEdited?.(path),
-				onFileDeleted: (path) => toolCallbacksRef.current.onFileDeleted?.(path),
-				onBuildRequested: toolCallbacksRef.current.onBuildRequested
-					? () =>
-							toolCallbacksRef.current.onBuildRequested?.() ?? Promise.resolve()
-					: undefined,
-				waitForBuildComplete: toolCallbacksRef.current.waitForBuildComplete
-					? () =>
-							toolCallbacksRef.current.waitForBuildComplete?.() ??
-							Promise.resolve<BuildResult>({
-								status: "failed",
-								error: "Build tools are not available.",
-								logs: "",
-							})
-					: undefined,
-				getBuildOutput: toolCallbacksRef.current.getBuildOutput
-					? () => toolCallbacksRef.current.getBuildOutput?.()
-					: undefined,
-				onPublishRequested: toolCallbacksRef.current.onPublishRequested
-					? (data, options) =>
-							toolCallbacksRef.current.onPublishRequested?.(data, options) ??
-							Promise.resolve<PublishResult>({
-								success: false,
-								error: "Publish is not available.",
-							})
-					: undefined,
-			});
+			const agent = createTemplateAgent(
+				modelConfig,
+				getFileTree,
+				setFileTree,
+				hasBuiltInCurrentRunRef,
+				{
+					onFileEdited: (path) => toolCallbacksRef.current.onFileEdited?.(path),
+					onFileDeleted: (path) =>
+						toolCallbacksRef.current.onFileDeleted?.(path),
+					onBuildRequested: toolCallbacksRef.current.onBuildRequested
+						? () =>
+								toolCallbacksRef.current.onBuildRequested?.() ??
+								Promise.resolve()
+						: undefined,
+					waitForBuildComplete: toolCallbacksRef.current.waitForBuildComplete
+						? () =>
+								toolCallbacksRef.current.waitForBuildComplete?.() ??
+								Promise.resolve<BuildResult>({
+									status: "failed",
+									error: "Build tools are not available.",
+									logs: "",
+								})
+						: undefined,
+					getBuildOutput: toolCallbacksRef.current.getBuildOutput
+						? () => toolCallbacksRef.current.getBuildOutput?.()
+						: undefined,
+					onPublishRequested: toolCallbacksRef.current.onPublishRequested
+						? (data, options) =>
+								toolCallbacksRef.current.onPublishRequested?.(data, options) ??
+								Promise.resolve<PublishResult>({
+									success: false,
+									error: "Publish is not available.",
+								})
+						: undefined,
+				},
+			);
 
 			let stream: Awaited<ReturnType<typeof createAgentUIStream>>;
 			try {
@@ -624,6 +643,10 @@ export const useTemplateAgent = ({
 			const trimmed = text.trim();
 			if (!trimmed) {
 				return;
+			}
+
+			if (uiMessagesRef.current.length === 0) {
+				hasBuiltInCurrentRunRef.current = false;
 			}
 
 			const userMessage: UIMessage = {
@@ -715,6 +738,7 @@ export const useTemplateAgent = ({
 	const reset = useCallback(() => {
 		abortRef.current?.abort();
 		abortRef.current = null;
+		hasBuiltInCurrentRunRef.current = false;
 		messageCounter.current = 0;
 		setConversationMessages([]);
 		setStatus("idle");

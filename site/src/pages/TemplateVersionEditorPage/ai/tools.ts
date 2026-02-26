@@ -59,12 +59,10 @@ interface TemplateAgentToolCallbacks {
 export function createTemplateAgentTools(
 	getFileTree: () => FileTree,
 	setFileTree: (updater: (prev: FileTree) => FileTree) => void,
+	hasBuiltInCurrentRunRef: { current: boolean },
 	callbacks: TemplateAgentToolCallbacks = {},
 ) {
 	const { onFileEdited, onFileDeleted } = callbacks;
-	// Track whether the current tool loop has produced a successful build
-	// for the latest in-memory file tree.
-	let hasBuiltInCurrentRun = false;
 
 	return {
 		listFiles: tool({
@@ -133,7 +131,7 @@ export function createTemplateAgentTools(
 					newContent,
 				});
 				if (result.success) {
-					hasBuiltInCurrentRun = false;
+					hasBuiltInCurrentRunRef.current = false;
 					onFileEdited?.(path);
 				}
 				return result;
@@ -152,7 +150,7 @@ export function createTemplateAgentTools(
 			execute: async ({ path }) => {
 				const result = executeDeleteFile(getFileTree, setFileTree, { path });
 				if (result.success) {
-					hasBuiltInCurrentRun = false;
+					hasBuiltInCurrentRunRef.current = false;
 					onFileDeleted?.(path);
 				}
 				return result;
@@ -189,13 +187,13 @@ export function createTemplateAgentTools(
 				try {
 					await callbacks.onBuildRequested();
 				} catch (err) {
-					hasBuiltInCurrentRun = false;
+					hasBuiltInCurrentRunRef.current = false;
 					const message =
 						err instanceof Error ? err.message : "Failed to trigger build";
 					return { status: "failed" as const, error: message, logs: "" };
 				}
 				const result = await buildPromise;
-				hasBuiltInCurrentRun = result.status === "succeeded";
+				hasBuiltInCurrentRunRef.current = result.status === "succeeded";
 				return result;
 			},
 		}),
@@ -254,7 +252,9 @@ export function createTemplateAgentTools(
 							message,
 							isActiveVersion,
 						},
-						hasBuiltInCurrentRun ? { skipDirtyCheck: true } : undefined,
+						hasBuiltInCurrentRunRef.current
+							? { skipDirtyCheck: true }
+							: undefined,
 					);
 				} catch (err) {
 					const errorMessage =

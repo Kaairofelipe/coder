@@ -225,10 +225,29 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	const [aiModelConfig, setAIModelConfig] = useState<AIModelConfig>();
 	const defaultAIModel = selectDefaultAIModel(aiModels);
 	useEffect(() => {
-		if (aiModelConfig === undefined && defaultAIModel !== undefined) {
-			setAIModelConfig(getDefaultModelConfig(defaultAIModel));
+		if (aiModelConfig === undefined) {
+			if (defaultAIModel !== undefined) {
+				setAIModelConfig(getDefaultModelConfig(defaultAIModel));
+			}
+			return;
 		}
-	}, [aiModelConfig, defaultAIModel]);
+
+		const currentModelIsAvailable = aiModels.some(
+			(model) =>
+				model.id === aiModelConfig.model.id &&
+				model.provider === aiModelConfig.model.provider,
+		);
+		if (currentModelIsAvailable) {
+			return;
+		}
+
+		if (defaultAIModel !== undefined) {
+			setAIModelConfig(getDefaultModelConfig(defaultAIModel));
+			return;
+		}
+
+		setAIModelConfig(undefined);
+	}, [aiModelConfig, aiModels, defaultAIModel]);
 	const aiAvailable = aiExperimentEnabled && aiModelConfig !== undefined;
 
 	// Use a ref so that getFileTree always returns the latest

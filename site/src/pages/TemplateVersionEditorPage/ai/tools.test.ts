@@ -10,11 +10,15 @@ const { createTemplateAgentTools } = await import("./tools");
 
 type ToolSet = ReturnType<typeof createTemplateAgentTools>;
 
-const makeTools = (overrides: Record<string, unknown> = {}): ToolSet => {
+const makeTools = (
+	overrides: Record<string, unknown> = {},
+	hasBuiltInCurrentRunRef: { current: boolean } = { current: false },
+): ToolSet => {
 	const fileTree: FileTree = { "main.tf": 'resource "null" {}' };
 	return createTemplateAgentTools(
 		() => fileTree,
 		() => {},
+		hasBuiltInCurrentRunRef,
 		overrides,
 	);
 };
@@ -200,6 +204,48 @@ describe("publishTemplate tool", () => {
 			{
 				name: "built-version",
 				message: "after build",
+				isActiveVersion: true,
+			},
+			{ skipDirtyCheck: true },
+		);
+	});
+
+	it("reuses a shared build-state ref across tool instances", async () => {
+		const hasBuiltInCurrentRunRef = { current: false };
+		const onBuildRequested = vi.fn().mockResolvedValue(undefined);
+		const waitForBuildComplete = vi
+			.fn()
+			.mockResolvedValue({ status: "succeeded", logs: "" });
+		const onPublishRequested = vi.fn().mockResolvedValue({ success: true });
+
+		const buildTools = makeTools(
+			{
+				onBuildRequested,
+				waitForBuildComplete,
+				onPublishRequested,
+			},
+			hasBuiltInCurrentRunRef,
+		);
+		await executeBuild(buildTools);
+
+		const publishTools = makeTools(
+			{
+				onBuildRequested,
+				waitForBuildComplete,
+				onPublishRequested,
+			},
+			hasBuiltInCurrentRunRef,
+		);
+		await executePublish(publishTools, {
+			name: "built-version",
+			message: "after approval",
+			isActiveVersion: true,
+		});
+
+		expect(onPublishRequested).toHaveBeenLastCalledWith(
+			{
+				name: "built-version",
+				message: "after approval",
 				isActiveVersion: true,
 			},
 			{ skipDirtyCheck: true },
