@@ -32,6 +32,7 @@ export const ReasoningBlock: FC<ReasoningBlockProps> = ({ reasoning }) => {
 			<button
 				type="button"
 				onClick={() => setIsOpen((prev) => !prev)}
+				aria-expanded={isOpen}
 				className={cn(
 					"flex w-full items-center gap-2 rounded-md px-1 py-1 text-left",
 					"cursor-pointer border-none bg-transparent transition-colors",

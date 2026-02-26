@@ -79,6 +79,7 @@ export const ChatInput: FC<ChatInputProps> = ({
 				disabled={disabled}
 				rows={1}
 				placeholder={placeholder}
+				aria-label="Message AI assistant"
 				className={cn(
 					"max-h-[150px] min-h-10 flex-1 resize-none rounded-md",
 					"border border-solid border-border bg-transparent px-3 py-2",
