@@ -11,6 +11,7 @@ import (
 	"github.com/coder/aibridge"
 	"github.com/coder/aibridge/recorder"
 	agplaibridge "github.com/coder/coder/v2/coderd/aibridge"
+	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/enterprise/aibridged/proto"
 )
 
@@ -44,8 +45,21 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove the Coder token header so it's not forwarded to upstream providers.
+	// Remove Coder auth credentials so they are not forwarded upstream.
 	r.Header.Del(agplaibridge.HeaderCoderAuth)
+	r.Header.Del(codersdk.SessionTokenHeader)
+
+	// Strip Coder session cookie so it's not forwarded upstream.
+	filtered := make([]*http.Cookie, 0, len(r.Cookies()))
+	for _, c := range r.Cookies() {
+		if c.Name != codersdk.SessionTokenCookie {
+			filtered = append(filtered, c)
+		}
+	}
+	r.Header.Del("Cookie")
+	for _, c := range filtered {
+		r.AddCookie(c)
+	}
 
 	client, err := s.Client()
 	if err != nil {

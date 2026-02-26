@@ -174,7 +174,7 @@ func TestServeHTTP_FailureModes(t *testing.T) {
 	}
 }
 
-func TestServeHTTP_CoderTokenRemoved(t *testing.T) {
+func TestServeHTTPStripsCoderTokenHeader(t *testing.T) {
 	t.Parallel()
 
 	mockHandler := &mockHandler{}
@@ -192,9 +192,11 @@ func TestServeHTTP_CoderTokenRemoved(t *testing.T) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, httpSrv.URL+"/openai/v1/chat/completions", nil)
 	require.NoError(t, err)
 
-	// X-Coder-Token is used for authentication and should be stripped.
+	// Coder auth credentials are used for authentication and should be stripped.
 	// Other authorization headers should be preserved.
 	req.Header.Set(agplaibridge.HeaderCoderAuth, "coder-token")
+	req.Header.Set(codersdk.SessionTokenHeader, "session-key")
+	req.AddCookie(&http.Cookie{Name: codersdk.SessionTokenCookie, Value: "session-cookie"})
 	req.Header.Set("Authorization", "Bearer some-token")
 	req.Header.Set("X-Api-Key", "some-api-key")
 
@@ -204,10 +206,18 @@ func TestServeHTTP_CoderTokenRemoved(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// Verify X-Coder-Token was removed before forwarding to handler.
+	// Verify Coder auth headers were removed before forwarding to handler.
 	require.NotNil(t, mockHandler.headersReceived)
 	require.Empty(t, mockHandler.headersReceived.Get(agplaibridge.HeaderCoderAuth),
 		"X-Coder-Token should be removed before forwarding to handler")
+	require.Empty(t, mockHandler.headersReceived.Get(codersdk.SessionTokenHeader),
+		"Coder-Session-Token should be removed before forwarding to handler")
+
+	// Verify session cookie was stripped.
+	for _, c := range mockHandler.cookiesReceived {
+		require.NotEqual(t, codersdk.SessionTokenCookie, c.Name,
+			"coder_session_token cookie should be removed before forwarding")
+	}
 
 	// Verify other headers were preserved.
 	require.Equal(t, "Bearer some-token", mockHandler.headersReceived.Get("Authorization"))
@@ -353,10 +363,12 @@ var _ http.Handler = &mockHandler{}
 
 type mockHandler struct {
 	headersReceived http.Header
+	cookiesReceived []*http.Cookie
 }
 
 func (h *mockHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	h.headersReceived = r.Header.Clone()
+	h.cookiesReceived = r.Cookies()
 	rw.WriteHeader(http.StatusOK)
 	_, _ = rw.Write([]byte(r.URL.Path))
 }
