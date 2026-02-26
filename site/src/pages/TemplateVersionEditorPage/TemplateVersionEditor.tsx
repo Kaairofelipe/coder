@@ -392,7 +392,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 				error:
 					status === "unknown"
 						? (templateVersion.job.error ??
-								"Build ended with an unknown status.")
+							"Build ended with an unknown status.")
 						: templateVersion.job.error,
 				logs: logText,
 			});
