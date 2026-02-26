@@ -193,8 +193,7 @@ const TemplateVersionEditorPage: FC = () => {
 						navigateToVersion(publishedVersion);
 					}}
 					onPublishVersion={async (data) => {
-						const publishedVersion = await doPublish(data);
-						navigateToVersion(publishedVersion);
+						await doPublish(data);
 					}}
 					isAskingPublishParameters={isPublishingDialogOpen}
 					isPublishing={publishVersionMutation.isPending}
