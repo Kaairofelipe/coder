@@ -275,12 +275,6 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 	// Uses direct connection (no proxy) to avoid circular dependency.
 	coderHTTPClient := &http.Client{
 		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-				RootCAs:    rootCAs,
-			},
-		},
 	}
 
 	srv := &Server{
