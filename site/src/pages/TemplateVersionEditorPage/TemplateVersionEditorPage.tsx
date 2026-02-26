@@ -191,7 +191,17 @@ const TemplateVersionEditorPage: FC = () => {
 						navigateToVersion(publishedVersion);
 					}}
 					onPublishVersion={async (data) => {
-						await doPublish(data);
+						const publishedVersion = await doPublish(data);
+						const templatePath = `${getLink(
+							linkToTemplate(organizationName, templateName),
+						)}/versions/${publishedVersion.name}/edit`;
+						const query = searchParams.toString();
+						const nextPath = query
+							? `${templatePath}?${query}`
+							: templatePath;
+						// Update the URL without triggering React Router navigation,
+						// which would unmount the editor and reset the AI chat session.
+						window.history.replaceState(null, "", nextPath);
 					}}
 					isAskingPublishParameters={isPublishingDialogOpen}
 					isPublishing={publishVersionMutation.isPending}
