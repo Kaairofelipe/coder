@@ -386,6 +386,17 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		onPublishRequested: handlePublish,
 	});
 
+	const { resetBuildState } = templateAgent;
+
+	// Manual editor/file-tree edits set dirty=true outside the AI tool flow.
+	// Invalidate build state so publish cannot skip the dirty check.
+	useEffect(() => {
+		if (!dirty) {
+			return;
+		}
+		resetBuildState();
+	}, [dirty, resetBuildState]);
+
 	// Resolve the build promise when job status becomes terminal.
 	useEffect(() => {
 		const pending = buildCompleteResolverRef.current;

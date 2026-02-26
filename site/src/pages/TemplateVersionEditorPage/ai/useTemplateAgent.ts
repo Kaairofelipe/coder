@@ -744,6 +744,10 @@ export const useTemplateAgent = ({
 		setStatus("idle");
 	}, [setConversationMessages]);
 
+	const resetBuildState = useCallback(() => {
+		hasBuiltInCurrentRunRef.current = false;
+	}, []);
+
 	const messages = useMemo(() => toDisplayMessages(uiMessages), [uiMessages]);
 	const pendingApproval =
 		pendingApprovals.length > 0 ? pendingApprovals[0] : null;
@@ -758,6 +762,7 @@ export const useTemplateAgent = ({
 		reject,
 		stop,
 		reset,
+		resetBuildState,
 	};
 };
 
