@@ -261,9 +261,12 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 		[onActivePathChange],
 	);
 
+	// Monotonic ID for build waiters. This prevents stale build completions
+	// from resolving a promise registered for a newer build.
+	const buildIdRef = useRef(0);
 	// Ref: resolver for the in-flight build promise.
 	const buildCompleteResolverRef = useRef<
-		((result: BuildResult) => void) | null
+		{ id: number; resolve: (result: BuildResult) => void } | null
 	>(null);
 
 	const triggerBuild = useCallback(async () => {
@@ -272,7 +275,9 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 
 	const waitForBuildComplete = useCallback((): Promise<BuildResult> => {
 		return new Promise<BuildResult>((resolve) => {
-			buildCompleteResolverRef.current = resolve;
+			const id = buildIdRef.current + 1;
+			buildIdRef.current = id;
+			buildCompleteResolverRef.current = { id, resolve };
 		});
 	}, []);
 
@@ -342,8 +347,12 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 
 	// Resolve the build promise when job status becomes terminal.
 	useEffect(() => {
-		const resolver = buildCompleteResolverRef.current;
-		if (!resolver) {
+		const pending = buildCompleteResolverRef.current;
+		if (!pending) {
+			return;
+		}
+		// Ignore terminal status updates that belong to an older build waiter.
+		if (pending.id !== buildIdRef.current) {
 			return;
 		}
 		const status = templateVersion.job.status;
@@ -355,7 +364,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 			const logText = (buildLogs ?? [])
 				.map((l) => `[${l.log_level}] ${l.stage}: ${l.output}`)
 				.join("\n");
-			resolver({ status, error: templateVersion.job.error, logs: logText });
+			pending.resolve({ status, error: templateVersion.job.error, logs: logText });
 			buildCompleteResolverRef.current = null;
 		}
 	}, [templateVersion.job.status, templateVersion.job.error, buildLogs]);
@@ -366,8 +375,9 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	useEffect(() => {
 		return () => {
 			templateAgent.stop();
-			if (buildCompleteResolverRef.current) {
-				buildCompleteResolverRef.current({
+			const pending = buildCompleteResolverRef.current;
+			if (pending && pending.id === buildIdRef.current) {
+				pending.resolve({
 					status: "canceled",
 					error: "Agent stopped.",
 					logs: "",
