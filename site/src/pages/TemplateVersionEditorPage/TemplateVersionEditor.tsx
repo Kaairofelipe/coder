@@ -299,7 +299,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 			message?: string;
 			isActiveVersion?: boolean;
 		}): Promise<PublishResult> => {
-			if (dirty) {
+			if (dirty && templateVersion.job.status !== "succeeded") {
 				return {
 					success: false,
 					error: "There are unsaved changes. Build the template first.",
