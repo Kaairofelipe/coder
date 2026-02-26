@@ -265,9 +265,10 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 	// from resolving a promise registered for a newer build.
 	const buildIdRef = useRef(0);
 	// Ref: resolver for the in-flight build promise.
-	const buildCompleteResolverRef = useRef<
-		{ id: number; resolve: (result: BuildResult) => void } | null
-	>(null);
+	const buildCompleteResolverRef = useRef<{
+		id: number;
+		resolve: (result: BuildResult) => void;
+	} | null>(null);
 
 	const triggerBuild = useCallback(async () => {
 		await onPreview(getFileTree());
@@ -380,7 +381,11 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 			const logText = (buildLogs ?? [])
 				.map((l) => `[${l.log_level}] ${l.stage}: ${l.output}`)
 				.join("\n");
-			pending.resolve({ status, error: templateVersion.job.error, logs: logText });
+			pending.resolve({
+				status,
+				error: templateVersion.job.error,
+				logs: logText,
+			});
 			buildCompleteResolverRef.current = null;
 		}
 	}, [templateVersion.job.status, templateVersion.job.error, buildLogs]);
