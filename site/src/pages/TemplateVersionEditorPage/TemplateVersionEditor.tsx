@@ -880,6 +880,7 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 										onModelConfigChange={setAIModelConfig}
 										onNavigateToFile={navigateToExistingFile}
 										onClose={() => {
+											templateAgent.stop();
 											setAIPanelOpen(false);
 										}}
 									/>
