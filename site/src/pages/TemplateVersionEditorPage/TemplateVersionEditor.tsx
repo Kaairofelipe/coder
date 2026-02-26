@@ -298,12 +298,22 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 			message?: string;
 			isActiveVersion?: boolean;
 		}): Promise<PublishResult> => {
+			if (dirty) {
+				return {
+					success: false,
+					error: "There are unsaved changes. Build the template first.",
+				};
+			}
+			if (templateVersion.job.status !== "succeeded") {
+				return {
+					success: false,
+					error: "Cannot publish — the build must succeed first.",
+				};
+			}
 			if (!canPublish) {
 				return {
 					success: false,
-					error: dirty
-						? "There are unsaved changes. Build the template first."
-						: "Cannot publish — the build must succeed first.",
+					error: "This version is already the active version.",
 				};
 			}
 			try {
@@ -323,7 +333,13 @@ export const TemplateVersionEditor: FC<TemplateVersionEditorProps> = ({
 				return { success: false, error: msg };
 			}
 		},
-		[canPublish, dirty, onPublishVersion, templateVersion.name],
+		[
+			canPublish,
+			dirty,
+			onPublishVersion,
+			templateVersion.job.status,
+			templateVersion.name,
+		],
 	);
 
 	// The agent hook lives here (not inside AIChatPanel) so that
