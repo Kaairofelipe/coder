@@ -82,8 +82,8 @@ const MODEL_DISCOVERY_REFRESH_MS = 60_000;
  * deployments may configure either provider independently.
  *
  * Returns an empty array when probes succeed but no models are configured.
- * Throws when all discovered models are empty and at least one provider probe
- * failed, allowing react-query to preserve previous successful data.
+ * Throws when both provider probes fail, allowing react-query to preserve
+ * previous successful data.
  */
 export const aiBridgeModels = (): UseQueryOptions<AIBridgeModel[]> => ({
 	queryKey: ["aiBridgeModels"],
@@ -97,11 +97,15 @@ export const aiBridgeModels = (): UseQueryOptions<AIBridgeModel[]> => ({
 			probe.status === "fulfilled" ? probe.value : [],
 		);
 
-		const hadProbeFailure =
-			openAIProbe.status === "rejected" || anthropicProbe.status === "rejected";
-		if (models.length === 0 && hadProbeFailure) {
+		// Only throw when both probes failed — this preserves react-query's
+		// previous data while all providers are genuinely unreachable. When at
+		// least one probe succeeded (even returning zero models), return the
+		// result so model availability is reflected accurately.
+		const bothProbesFailed =
+			openAIProbe.status === "rejected" && anthropicProbe.status === "rejected";
+		if (bothProbesFailed) {
 			throw new Error(
-				"Failed to refresh AI bridge model discovery from one or more providers.",
+				"Failed to refresh AI bridge model discovery — all provider probes failed.",
 			);
 		}
 
