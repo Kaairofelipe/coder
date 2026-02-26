@@ -151,6 +151,73 @@ func TestChats(t *testing.T) {
 			require.Equal(t, workspaceBuild.Agents[0].ID, *chat.WorkspaceAgentID)
 		})
 
+		t.Run("MemberUserNilModelConfigID", func(t *testing.T) {
+			t.Parallel()
+
+			ctx := testutil.Context(t, testutil.WaitLong)
+			adminClient, _ := coderdtest.NewWithDatabase(t, nil)
+			firstUser := coderdtest.CreateFirstUser(t, adminClient)
+			modelConfig := createChatModelConfig(t, adminClient)
+			memberClient, memberUser := coderdtest.CreateAnotherUser(t, adminClient, firstUser.OrganizationID)
+
+			chat, err := memberClient.CreateChat(ctx, codersdk.CreateChatRequest{
+				Content: []codersdk.ChatInputPart{
+					{
+						Type: codersdk.ChatInputPartTypeText,
+						Text: "hello from member user",
+					},
+				},
+				ModelConfigID: uuid.Nil,
+			})
+			require.NoError(t, err)
+			require.NotEqual(t, uuid.Nil, chat.ID)
+			require.Equal(t, memberUser.ID, chat.OwnerID)
+			require.Equal(t, modelConfig.ID, chat.LastModelConfigID)
+			require.Equal(t, codersdk.ChatStatusPending, chat.Status)
+		})
+
+		t.Run("MemberUserExplicitModelConfigID", func(t *testing.T) {
+			t.Parallel()
+
+			ctx := testutil.Context(t, testutil.WaitLong)
+			adminClient, _ := coderdtest.NewWithDatabase(t, nil)
+			firstUser := coderdtest.CreateFirstUser(t, adminClient)
+			modelConfig := createChatModelConfig(t, adminClient)
+			memberClient, _ := coderdtest.CreateAnotherUser(t, adminClient, firstUser.OrganizationID)
+
+			chat, err := memberClient.CreateChat(ctx, codersdk.CreateChatRequest{
+				Content: []codersdk.ChatInputPart{
+					{
+						Type: codersdk.ChatInputPartTypeText,
+						Text: "hello with explicit config",
+					},
+				},
+				ModelConfigID: modelConfig.ID,
+			})
+			require.NoError(t, err)
+			require.Equal(t, modelConfig.ID, chat.LastModelConfigID)
+		})
+
+		t.Run("NilModelConfigIDNoModelsConfigured", func(t *testing.T) {
+			t.Parallel()
+
+			ctx := testutil.Context(t, testutil.WaitLong)
+			client := coderdtest.New(t, nil)
+			_ = coderdtest.CreateFirstUser(t, client)
+
+			_, err := client.CreateChat(ctx, codersdk.CreateChatRequest{
+				Content: []codersdk.ChatInputPart{
+					{
+						Type: codersdk.ChatInputPartTypeText,
+						Text: "hello with no models",
+					},
+				},
+				ModelConfigID: uuid.Nil,
+			})
+			sdkErr := requireSDKError(t, err, http.StatusBadRequest)
+			require.Equal(t, "No model configurations are available.", sdkErr.Message)
+		})
+
 		t.Run("EmptyContent", func(t *testing.T) {
 			t.Parallel()
 

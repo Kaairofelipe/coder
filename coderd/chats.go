@@ -258,6 +258,36 @@ func (api *API) postChats(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.ModelConfigID == uuid.Nil {
+		//nolint:gocritic // Member users cannot read deployment config
+		// but still need a valid model config to create chats.
+		enabledConfigs, err := api.Database.GetEnabledChatModelConfigs(
+			dbauthz.AsSystemRestricted(ctx),
+		)
+		if err != nil {
+			httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+				Message: "Failed to resolve default model configuration.",
+				Detail:  err.Error(),
+			})
+			return
+		}
+		if len(enabledConfigs) == 0 {
+			httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
+				Message: "No model configurations are available.",
+				Detail:  "An administrator must configure at least one chat model.",
+			})
+			return
+		}
+		// Prefer the default config; fall back to first enabled.
+		req.ModelConfigID = enabledConfigs[0].ID
+		for _, cfg := range enabledConfigs {
+			if cfg.IsDefault {
+				req.ModelConfigID = cfg.ID
+				break
+			}
+		}
+	}
+
 	title := chatTitleFromMessage(titleSource)
 
 	content, err := json.Marshal(contentBlocks)
