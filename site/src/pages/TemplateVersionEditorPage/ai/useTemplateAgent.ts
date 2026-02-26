@@ -472,6 +472,27 @@ export const useTemplateAgent = ({
 	const messageCounter = useRef(0);
 	const abortRef = useRef<AbortController | null>(null);
 
+	// Ref wrappers for tool callbacks that may change between steps of a
+	// multi-step stream (e.g., dirty/build-status changes after an edit).
+	// Dereferencing through the ref ensures each tool invocation reads
+	// the latest editor/build state.
+	const toolCallbacksRef = useRef({
+		onFileEdited,
+		onFileDeleted,
+		onBuildRequested,
+		waitForBuildComplete,
+		getBuildOutput,
+		onPublishRequested,
+	});
+	toolCallbacksRef.current = {
+		onFileEdited,
+		onFileDeleted,
+		onBuildRequested,
+		waitForBuildComplete,
+		getBuildOutput,
+		onPublishRequested,
+	};
+
 	const setConversationMessages = useCallback((next: UIMessage[]) => {
 		uiMessagesRef.current = next;
 		setUIMessages(next);
@@ -493,12 +514,32 @@ export const useTemplateAgent = ({
 			};
 
 			const agent = createTemplateAgent(modelConfig, getFileTree, setFileTree, {
-				onFileEdited,
-				onFileDeleted,
-				onBuildRequested,
-				waitForBuildComplete,
-				getBuildOutput,
-				onPublishRequested,
+				onFileEdited: (path) => toolCallbacksRef.current.onFileEdited?.(path),
+				onFileDeleted: (path) => toolCallbacksRef.current.onFileDeleted?.(path),
+				onBuildRequested: toolCallbacksRef.current.onBuildRequested
+					? () =>
+							toolCallbacksRef.current.onBuildRequested?.() ?? Promise.resolve()
+					: undefined,
+				waitForBuildComplete: toolCallbacksRef.current.waitForBuildComplete
+					? () =>
+							toolCallbacksRef.current.waitForBuildComplete?.() ??
+							Promise.resolve<BuildResult>({
+								status: "failed",
+								error: "Build tools are not available.",
+								logs: "",
+							})
+					: undefined,
+				getBuildOutput: toolCallbacksRef.current.getBuildOutput
+					? () => toolCallbacksRef.current.getBuildOutput?.()
+					: undefined,
+				onPublishRequested: toolCallbacksRef.current.onPublishRequested
+					? (data) =>
+							toolCallbacksRef.current.onPublishRequested?.(data) ??
+							Promise.resolve<PublishResult>({
+								success: false,
+								error: "Publish is not available.",
+							})
+					: undefined,
 			});
 
 			let stream: Awaited<ReturnType<typeof createAgentUIStream>>;
@@ -557,18 +598,7 @@ export const useTemplateAgent = ({
 			const pending = collectPendingApprovals(nextConversation);
 			finishRun(pending.length > 0 ? "awaiting_approval" : "idle");
 		},
-		[
-			getFileTree,
-			getBuildOutput,
-			modelConfig,
-			onBuildRequested,
-			onFileDeleted,
-			onFileEdited,
-			onPublishRequested,
-			setConversationMessages,
-			setFileTree,
-			waitForBuildComplete,
-		],
+		[getFileTree, modelConfig, setConversationMessages, setFileTree],
 	);
 
 	const send = useCallback(
