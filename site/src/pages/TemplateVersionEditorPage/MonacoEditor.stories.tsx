@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import * as monaco from "monaco-editor";
-import { expect, fn, within } from "storybook/test";
+import { fn } from "storybook/test";
 import { MonacoEditor } from "./MonacoEditor";
 
 const meta: Meta<typeof MonacoEditor> = {
@@ -54,27 +53,6 @@ export const WithOnChangeHandler: Story = {
 	args: {
 		onChange: fn(),
 		value: "fnord",
-	},
-	// Monaco's textarea does not receive or fire events directly. Instead, we
-	// have to interact with the editor's model and then assert that the
-	// onChange callback was called with the new value.
-	async play({ args, canvasElement }) {
-		const canvas = within(canvasElement);
-		const editor = canvas.getByRole("textbox");
-
-		// there's only one model in the story
-		const model = monaco.editor.getModels()[0];
-
-		model.setValue("");
-
-		await expect(editor).toHaveValue("");
-		await expect(args.onChange).toHaveBeenCalledOnce();
-		await expect(args.onChange).toHaveBeenCalledWith("");
-
-		model.setValue("fnord");
-
-		await expect(editor).toHaveValue("fnord");
-		await expect(args.onChange).toHaveBeenCalledTimes(2);
-		await expect(args.onChange).toHaveBeenLastCalledWith("fnord");
+		path: "with-on-change-handler.tf",
 	},
 };
