@@ -272,7 +272,6 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 	}
 
 	// HTTP client for validating Coder tokens against the Coder API.
-	// Uses direct connection (no proxy) to avoid circular dependency.
 	coderHTTPClient := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -639,8 +638,8 @@ func defaultAIBridgeProvider(host string) string {
 
 // tunneledMiddleware is a CONNECT middleware that handles tunneled (non-allowlisted)
 // connections. These connections are not MITM'd and are tunneled directly to their
-// destination. The Coder token from Proxy-Authorization is validated against the
-// Coder API before allowing the tunnel.
+// destination. This middleware records metrics for tunneled CONNECT sessions.
+// The Coder token from Proxy-Authorization is validated against the Coder API before allowing the tunnel.
 func (s *Server) tunneledMiddleware(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
 	logger := s.logger.With(slog.F("host", host))
 
@@ -652,6 +651,8 @@ func (s *Server) tunneledMiddleware(host string, ctx *goproxy.ProxyCtx) (*goprox
 		logger.Warn(s.ctx, "rejecting tunneled CONNECT request",
 			slog.F("reason", map[bool]string{true: "invalid_credentials", false: "missing_credentials"}[hasAuth]),
 		)
+
+		// Send 407 challenge to allow clients to retry with credentials.
 		ctx.Resp = newProxyAuthRequiredResponse(ctx.Req) //nolint:bodyclose // Response body is written by goproxy to the client
 		return goproxy.RejectConnect, host
 	}
@@ -664,10 +665,13 @@ func (s *Server) tunneledMiddleware(host string, ctx *goproxy.ProxyCtx) (*goprox
 		return goproxy.RejectConnect, host
 	}
 
+	// Record tunneled CONNECT session establishment.
 	if s.metrics != nil {
 		s.metrics.ConnectSessionsTotal.WithLabelValues(RequestTypeTunneled).Inc()
 	}
 
+	// Return OkConnect to allow the tunnel to be established.
+	// goproxy will create a tunnel between the client and the destination.
 	return goproxy.OkConnect, host
 }
 
