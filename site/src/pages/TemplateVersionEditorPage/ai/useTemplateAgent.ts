@@ -321,12 +321,25 @@ const toDisplayMessages = (uiMessages: UIMessage[]): DisplayMessage[] => {
 				currentText += part.text;
 				lastPartWasTool = false;
 			} else if (isReasoningUIPart(part)) {
+				// Flush when reasoning follows tool calls, just like
+				// text does — reasoning belongs to the next segment.
+				if (lastPartWasTool && currentToolCalls.length > 0) {
+					result.push({
+						id: `${message.id}-${segmentIndex++}`,
+						role: "assistant",
+						content: currentText,
+						toolCalls: currentToolCalls,
+						reasoning: currentReasoning,
+					});
+					currentText = "";
+					currentToolCalls = [];
+					currentReasoning = [];
+				}
 				currentReasoning.push({
 					text: part.text,
 					isStreaming: part.state === "streaming",
 				});
-				// Reasoning doesn't flip the lastPartWasTool
-				// flag — it flows before the text it explains.
+				lastPartWasTool = false;
 			} else if (isToolUIPart(part)) {
 				currentToolCalls.push(mapToolStateToDisplay(part));
 				lastPartWasTool = true;
