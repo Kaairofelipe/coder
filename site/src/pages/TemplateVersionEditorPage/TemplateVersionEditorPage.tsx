@@ -121,16 +121,14 @@ const TemplateVersionEditorPage: FC = () => {
 		isActiveVersion,
 		...data
 	}: PublishVersionData) => {
-		if (!activeTemplateVersion) {
-			throw new Error("Cannot publish a template version before it loads.");
-		}
+		const templateVersion = activeTemplateVersion!;
 		await publishVersionMutation.mutateAsync({
 			isActiveVersion,
 			data,
-			version: activeTemplateVersion,
+			version: templateVersion,
 		});
 		const publishedVersion = {
-			...activeTemplateVersion,
+			...templateVersion,
 			...data,
 		};
 		setLastSuccessfulPublishedVersion(publishedVersion);
