@@ -53,6 +53,11 @@ export const ChatInput: FC<ChatInputProps> = ({
 
 	const onKeyDown = useCallback(
 		(event: KeyboardEvent<HTMLTextAreaElement>) => {
+			// Ignore Enter during IME composition (e.g., CJK input) so
+			// confirming a candidate doesn't send partial text.
+			if (event.nativeEvent.isComposing) {
+				return;
+			}
 			if (event.key === "Enter" && !event.shiftKey) {
 				event.preventDefault();
 				event.stopPropagation();
