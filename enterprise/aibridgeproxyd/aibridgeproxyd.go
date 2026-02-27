@@ -28,6 +28,7 @@ import (
 	"github.com/coder/aibridge"
 	agplaibridge "github.com/coder/coder/v2/coderd/aibridge"
 	"github.com/coder/coder/v2/codersdk"
+	"github.com/coder/quartz"
 )
 
 // Known AI provider hosts.
@@ -77,6 +78,8 @@ type Server struct {
 	// coderHTTPClient is used to validate Coder tokens against the Coder API
 	// for tunneled CONNECT requests.
 	coderHTTPClient *http.Client
+	// tokenCache caches validated tokens to avoid repeated API calls.
+	tokenCache *tokenCache
 }
 
 // requestContext holds metadata propagated through the proxy request/response chain.
@@ -136,6 +139,12 @@ type Options struct {
 	// Metrics is the prometheus metrics instance for recording proxy metrics.
 	// If nil, metrics will not be recorded.
 	Metrics *Metrics
+	// TokenCacheTTL is the duration for which validated tokens are cached.
+	// If zero, defaults to 4 hours.
+	TokenCacheTTL time.Duration
+	// Clock is used for time operations in the token cache. If nil, defaults
+	// to real time. Exposed for testing.
+	Clock quartz.Clock
 }
 
 func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error) {
@@ -276,6 +285,18 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 		Timeout: 10 * time.Second,
 	}
 
+	// Initialize token cache with configured TTL (default 4 hours).
+	// The cache starts its own background cleanup goroutine.
+	tokenCacheTTL := opts.TokenCacheTTL
+	if tokenCacheTTL == 0 {
+		tokenCacheTTL = 4 * time.Hour
+	}
+	clock := opts.Clock
+	if clock == nil {
+		clock = quartz.NewReal()
+	}
+	cache := newTokenCache(ctx, tokenCacheTTL, clock)
+
 	srv := &Server{
 		ctx:                      ctx,
 		logger:                   logger,
@@ -285,6 +306,7 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 		caCert:                   certPEM,
 		metrics:                  opts.Metrics,
 		coderHTTPClient:          coderHTTPClient,
+		tokenCache:               cache,
 	}
 
 	// Reject CONNECT requests to non-standard ports.
@@ -676,13 +698,30 @@ func (s *Server) tunneledMiddleware(host string, ctx *goproxy.ProxyCtx) (*goprox
 }
 
 // validateCoderToken checks the token against the Coder API. Returns nil if valid.
+// Uses a cache to avoid repeated API calls for recently validated tokens.
 func (s *Server) validateCoderToken(ctx context.Context, token string) error {
+	// Hash the token for cache lookup (avoid storing raw tokens).
+	tokenHash := hashToken(token)
+
+	// Check cache first.
+	if s.tokenCache.isValid(tokenHash) {
+		return nil
+	}
+
+	// Validate against Coder API.
 	client := codersdk.New(s.coderAccessURL,
 		codersdk.WithSessionToken(token),
 		codersdk.WithHTTPClient(s.coderHTTPClient),
 	)
 	_, err := client.User(ctx, codersdk.Me)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Cache successful validation.
+	s.tokenCache.add(tokenHash)
+
+	return nil
 }
 
 // handleRequest intercepts HTTP requests after MITM decryption.

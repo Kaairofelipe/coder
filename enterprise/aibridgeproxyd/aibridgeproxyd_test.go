@@ -35,6 +35,7 @@ import (
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/enterprise/aibridgeproxyd"
 	"github.com/coder/coder/v2/testutil"
+	"github.com/coder/quartz"
 )
 
 // minimalUserJSON is a minimal valid User JSON for codersdk.Client.User token validation.
@@ -117,6 +118,8 @@ type testProxyConfig struct {
 	upstreamProxy            string
 	upstreamProxyCA          string
 	metrics                  *aibridgeproxyd.Metrics
+	tokenCacheTTL            time.Duration
+	clock                    quartz.Clock
 }
 
 type testProxyOption func(*testProxyConfig)
@@ -169,6 +172,18 @@ func withMetrics(metrics *aibridgeproxyd.Metrics) testProxyOption {
 	}
 }
 
+func withTokenCacheTTL(ttl time.Duration) testProxyOption {
+	return func(cfg *testProxyConfig) {
+		cfg.tokenCacheTTL = ttl
+	}
+}
+
+func withClock(clock quartz.Clock) testProxyOption {
+	return func(cfg *testProxyConfig) {
+		cfg.clock = clock
+	}
+}
+
 // newTestProxy creates a new AI Bridge Proxy server for testing.
 // It uses the shared test CA and registers cleanup automatically.
 // It waits for the proxy server to be ready before returning.
@@ -201,6 +216,8 @@ func newTestProxy(t *testing.T, opts ...testProxyOption) *aibridgeproxyd.Server 
 		UpstreamProxy:            cfg.upstreamProxy,
 		UpstreamProxyCA:          cfg.upstreamProxyCA,
 		Metrics:                  cfg.metrics,
+		TokenCacheTTL:            cfg.tokenCacheTTL,
+		Clock:                    cfg.clock,
 	}
 	if cfg.certStore != nil {
 		aibridgeOpts.CertStore = cfg.certStore
@@ -1384,6 +1401,87 @@ func TestProxy_Tunneled(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestProxy_TokenCaching verifies that validated tokens are cached to reduce
+// API calls to the Coder server.
+func TestProxy_TokenCaching(t *testing.T) {
+	t.Parallel()
+
+	// Track number of validation API calls.
+	var validationCalls int
+
+	// Create a mock Coder server that counts validation calls.
+	coderServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/users/me" && r.Method == http.MethodGet {
+			validationCalls++
+
+			token := r.Header.Get(codersdk.SessionTokenHeader)
+			if token == "test-token" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(minimalUserJSON))
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(func() { coderServer.Close() })
+
+	tunneledServer, tunneledURL := newTargetServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("hello from tunneled"))
+	})
+
+	// Use mock clock for testing cache expiry.
+	clock := quartz.NewMock(t)
+
+	// Create proxy with short cache TTL for testing.
+	srv := newTestProxy(t,
+		withCoderAccessURL(coderServer.URL),
+		withAllowedPorts(tunneledURL.Port()),
+		withDomainAllowlist(aibridgeproxyd.HostAnthropic), // Tunnel to tunneledServer
+		withTokenCacheTTL(100*time.Millisecond),
+		withClock(clock),
+	)
+
+	targetURL, err := url.JoinPath(tunneledURL.String(), "/test")
+	require.NoError(t, err)
+
+	certPool := x509.NewCertPool()
+	certPool.AddCert(tunneledServer.Certificate())
+
+	client := newProxyClient(t, srv, makeProxyAuthHeader("test-token"), certPool)
+
+	doRequest := func() {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, targetURL, nil)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
+	}
+
+	// First request - should validate token.
+	doRequest()
+	require.Equal(t, 1, validationCalls, "first request should validate token")
+
+	// Second request immediately after - should use cache.
+	doRequest()
+	require.Equal(t, 1, validationCalls, "second request should use cached token")
+
+	// Advance clock past cache TTL to expire the token.
+	// Advance in two steps: first to trigger cleanup ticker, then past expiry.
+	clock.Advance(100 * time.Millisecond).MustWait(t.Context())
+	clock.Advance(50 * time.Millisecond).MustWait(t.Context())
+
+	// Third request after expiry - should validate again.
+	doRequest()
+	require.Equal(t, 2, validationCalls, "third request after expiry should validate token again")
 }
 
 // TestServeCACert validates that a configured certificate file can be served correctly by the API.
