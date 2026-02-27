@@ -32,6 +32,7 @@ import (
 	"cdr.dev/slog/v3"
 	"cdr.dev/slog/v3/sloggers/slogtest"
 	agplaibridge "github.com/coder/coder/v2/coderd/aibridge"
+	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/enterprise/aibridgeproxyd"
 	"github.com/coder/coder/v2/testutil"
 )
@@ -296,7 +297,7 @@ func newMockCoderServer(t *testing.T, validToken string, aibridgedHandler http.H
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v2/users/me" && r.Method == http.MethodGet {
 			// Token validation for tunneled CONNECT requests.
-			token := r.Header.Get("Coder-Session-Token")
+			token := r.Header.Get(codersdk.SessionTokenHeader)
 			if token == validToken {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
@@ -872,7 +873,7 @@ func TestProxy_CertCaching(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			// Create a mock Coder server for token validation and aibridged.
+			// Create a mock Coder server for token validation and aibridged server for allowlisted (MITM'd) requests.
 			coderServer := newMockCoderServer(t, "test-token", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
