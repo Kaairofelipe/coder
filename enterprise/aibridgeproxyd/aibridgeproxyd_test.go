@@ -105,6 +105,41 @@ func generateSharedTestMITMCert() (certFile, keyFile string, err error) {
 	return certPath, keyPath, nil
 }
 
+// generateListenerCert generates a self-signed certificate and key for use as a
+// proxy listener TLS certificate. Files are written to t.TempDir() and cleaned
+// up automatically when the test ends.
+func generateListenerCert(t *testing.T) (certFile, keyFile string) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err, "generate listener key")
+
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test Listener"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	require.NoError(t, err, "create listener certificate")
+
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "listener.crt")
+	keyPath := filepath.Join(tmpDir, "listener.key")
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	require.NoError(t, os.WriteFile(certPath, certPEM, 0o600), "write listener cert file")
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0o600), "write listener key file")
+
+	return certPath, keyPath
+}
+
 type testProxyConfig struct {
 	listenAddr               string
 	coderAccessURL           string
@@ -364,6 +399,61 @@ func TestNew(t *testing.T) {
 		require.Contains(t, err.Error(), "listen address is required")
 	})
 
+	t.Run("TLSCertFileWithoutKeyFile", func(t *testing.T) {
+		t.Parallel()
+
+		mitmCertFile, mitmKeyFile := getSharedTestMITMCert(t)
+		logger := slogtest.Make(t, nil)
+
+		_, err := aibridgeproxyd.New(t.Context(), logger, aibridgeproxyd.Options{
+			ListenAddr:      "127.0.0.1:0",
+			TLSCertFile:     "cert.pem",
+			CoderAccessURL:  "http://localhost:3000",
+			MITMCertFile:    mitmCertFile,
+			MITMKeyFile:     mitmKeyFile,
+			DomainAllowlist: []string{aibridgeproxyd.HostAnthropic, aibridgeproxyd.HostOpenAI},
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "tls cert file and tls key file must both be set")
+	})
+
+	t.Run("TLSKeyFileWithoutCertFile", func(t *testing.T) {
+		t.Parallel()
+
+		mitmCertFile, mitmKeyFile := getSharedTestMITMCert(t)
+		logger := slogtest.Make(t, nil)
+
+		_, err := aibridgeproxyd.New(t.Context(), logger, aibridgeproxyd.Options{
+			ListenAddr:      "127.0.0.1:0",
+			TLSKeyFile:      "key.pem",
+			CoderAccessURL:  "http://localhost:3000",
+			MITMCertFile:    mitmCertFile,
+			MITMKeyFile:     mitmKeyFile,
+			DomainAllowlist: []string{aibridgeproxyd.HostAnthropic, aibridgeproxyd.HostOpenAI},
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "tls cert file and tls key file must both be set")
+	})
+
+	t.Run("InvalidListenerTLSFiles", func(t *testing.T) {
+		t.Parallel()
+
+		mitmCertFile, mitmKeyFile := getSharedTestMITMCert(t)
+		logger := slogtest.Make(t, nil)
+
+		_, err := aibridgeproxyd.New(t.Context(), logger, aibridgeproxyd.Options{
+			ListenAddr:      "127.0.0.1:0",
+			TLSCertFile:     "/nonexistent/cert.pem",
+			TLSKeyFile:      "/nonexistent/key.pem",
+			CoderAccessURL:  "http://localhost:3000",
+			MITMCertFile:    mitmCertFile,
+			MITMKeyFile:     mitmKeyFile,
+			DomainAllowlist: []string{aibridgeproxyd.HostAnthropic, aibridgeproxyd.HostOpenAI},
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "load listener TLS certificate")
+	})
+
 	t.Run("MissingCoderAccessURL", func(t *testing.T) {
 		t.Parallel()
 
@@ -607,6 +697,26 @@ func TestNew(t *testing.T) {
 
 		srv, err := aibridgeproxyd.New(t.Context(), logger, aibridgeproxyd.Options{
 			ListenAddr:      "127.0.0.1:0",
+			CoderAccessURL:  "http://localhost:3000",
+			MITMCertFile:    mitmCertFile,
+			MITMKeyFile:     mitmKeyFile,
+			DomainAllowlist: []string{aibridgeproxyd.HostAnthropic, aibridgeproxyd.HostOpenAI},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, srv)
+	})
+
+	t.Run("SuccessWithListenerTLS", func(t *testing.T) {
+		t.Parallel()
+
+		mitmCertFile, mitmKeyFile := getSharedTestMITMCert(t)
+		listenerCertFile, listenerKeyFile := generateListenerCert(t)
+		logger := slogtest.Make(t, nil)
+
+		srv, err := aibridgeproxyd.New(t.Context(), logger, aibridgeproxyd.Options{
+			ListenAddr:      "127.0.0.1:0",
+			TLSCertFile:     listenerCertFile,
+			TLSKeyFile:      listenerKeyFile,
 			CoderAccessURL:  "http://localhost:3000",
 			MITMCertFile:    mitmCertFile,
 			MITMKeyFile:     mitmKeyFile,
