@@ -68,9 +68,9 @@ type Server struct {
 	listener                 net.Listener
 	coderAccessURL           *url.URL
 	aibridgeProviderFromHost func(host string) string
-	// caCert is the PEM-encoded CA certificate loaded during initialization.
-	// This is served to clients who need to trust the proxy.
-	caCert []byte
+	// mitmCACert is the PEM-encoded MITM CA certificate loaded during initialization.
+	// This is served to clients who need to trust the proxy's generated certificates.
+	mitmCACert []byte
 	// Metrics is the Prometheus metrics for the proxy. If nil, metrics are disabled.
 	metrics *Metrics
 }
@@ -102,10 +102,10 @@ type Options struct {
 	// CoderAccessURL is the URL of the Coder deployment where aibridged is running.
 	// Requests to supported AI providers are forwarded here.
 	CoderAccessURL string
-	// CertFile is the path to the CA certificate file used for MITM.
-	CertFile string
-	// KeyFile is the path to the CA private key file used for MITM.
-	KeyFile string
+	// MITMCertFile is the path to the CA certificate file used for MITM.
+	MITMCertFile string
+	// MITMKeyFile is the path to the CA private key file used for MITM.
+	MITMKeyFile string
 	// AllowedPorts is the list of ports allowed for CONNECT requests.
 	// Defaults to ["80", "443"] if empty.
 	AllowedPorts []string
@@ -149,7 +149,8 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 		return nil, xerrors.Errorf("invalid coder access URL %q: %w", opts.CoderAccessURL, err)
 	}
 
-	if opts.CertFile == "" || opts.KeyFile == "" {
+	// MITM cert and key are required to intercept and decrypt HTTPS traffic.
+	if opts.MITMCertFile == "" || opts.MITMKeyFile == "" {
 		return nil, xerrors.New("cert file and key file are required")
 	}
 
@@ -182,8 +183,8 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 		}
 	}
 
-	// Load CA certificate for MITM
-	certPEM, err := loadMitmCertificate(opts.CertFile, opts.KeyFile)
+	// Load the CA certificate for MITM.
+	certPEM, err := loadMITMCertificate(opts.MITMCertFile, opts.MITMKeyFile)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load MITM certificate: %w", err)
 	}
@@ -273,7 +274,7 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 		proxy:                    proxy,
 		coderAccessURL:           coderAccessURL,
 		aibridgeProviderFromHost: aibridgeProviderFromHost,
-		caCert:                   certPEM,
+		mitmCACert:               certPEM,
 		metrics:                  opts.Metrics,
 	}
 
@@ -306,6 +307,7 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to listen on %s: %w", opts.ListenAddr, err)
 	}
+
 	srv.listener = listener
 
 	// Start HTTP server in background
@@ -357,14 +359,14 @@ func (s *Server) Close() error {
 	return s.httpServer.Shutdown(ctx)
 }
 
-// loadMitmCertificate loads the CA certificate and private key for MITM proxying.
+// loadMITMCertificate loads the MITM CA certificate and private key for MITM proxying.
 // This function is safe to call concurrently - the certificate is only loaded once
 // into the global goproxy.GoproxyCa variable.
 // Returns the PEM-encoded certificate for serving to clients.
-func loadMitmCertificate(certFile, keyFile string) ([]byte, error) {
+func loadMITMCertificate(certFile, keyFile string) ([]byte, error) {
 	tlsCert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, xerrors.Errorf("load CA certificate: %w", err)
+		return nil, xerrors.Errorf("load MITM CA certificate: %w", err)
 	}
 
 	if len(tlsCert.Certificate) == 0 {
@@ -373,7 +375,7 @@ func loadMitmCertificate(certFile, keyFile string) ([]byte, error) {
 
 	x509Cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
 	if err != nil {
-		return nil, xerrors.Errorf("parse CA certificate: %w", err)
+		return nil, xerrors.Errorf("parse MITM CA certificate: %w", err)
 	}
 
 	// Ensure that we only return the certificate and never any included private keys.
@@ -800,13 +802,13 @@ func (s *Server) Handler() http.Handler {
 // proxying. Clients need this certificate to trust the proxy's intercepted
 // connections. The certificate was validated during server initialization.
 func (s *Server) serveCACert(rw http.ResponseWriter, _ *http.Request) {
-	if len(s.caCert) == 0 {
-		http.Error(rw, "CA certificate not configured", http.StatusNotFound)
+	if len(s.mitmCACert) == 0 {
+		http.Error(rw, "MITM CA certificate not configured", http.StatusNotFound)
 		return
 	}
 
 	rw.Header().Set("Content-Type", "application/x-pem-file")
 	rw.Header().Set("Content-Disposition", "attachment; filename=ca-cert.pem")
 	rw.WriteHeader(http.StatusOK)
-	_, _ = rw.Write(s.caCert)
+	_, _ = rw.Write(s.mitmCACert)
 }
