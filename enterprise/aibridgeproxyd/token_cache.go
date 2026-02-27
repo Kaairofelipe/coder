@@ -14,25 +14,27 @@ import (
 // Tokens are hashed for security and cached with an expiry time.
 // The cache runs a background goroutine to clean up expired entries.
 type tokenCache struct {
-	mu      sync.RWMutex
-	entries map[string]time.Time // SHA256(token) -> expiry time
-	ttl     time.Duration
-	clock   quartz.Clock
+	mu              sync.RWMutex
+	entries         map[string]time.Time // SHA256(token) -> expiry time
+	ttl             time.Duration
+	cleanupInterval time.Duration
+	clock           quartz.Clock
 }
 
 // newTokenCache creates a new token cache with the specified TTL and starts
 // a background cleanup goroutine that removes expired entries.
-func newTokenCache(ctx context.Context, ttl time.Duration, clock quartz.Clock) *tokenCache {
+func newTokenCache(ctx context.Context, ttl, cleanupInterval time.Duration, clock quartz.Clock) *tokenCache {
 	c := &tokenCache{
-		entries: make(map[string]time.Time),
-		ttl:     ttl,
-		clock:   clock,
+		entries:         make(map[string]time.Time),
+		ttl:             ttl,
+		cleanupInterval: cleanupInterval,
+		clock:           clock,
 	}
 
 	// Start background cleanup goroutine.
-	// Runs every TTL duration to remove expired entries.
+	// Runs every cleanupInterval to remove expired entries.
 	go func() {
-		ticker := clock.NewTicker(ttl)
+		ticker := clock.NewTicker(cleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {

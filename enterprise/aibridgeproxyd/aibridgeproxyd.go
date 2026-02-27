@@ -295,7 +295,8 @@ func New(ctx context.Context, logger slog.Logger, opts Options) (*Server, error)
 	if clock == nil {
 		clock = quartz.NewReal()
 	}
-	cache := newTokenCache(ctx, tokenCacheTTL, clock)
+	// Use TTL as cleanup interval - in production they're the same.
+	cache := newTokenCache(ctx, tokenCacheTTL, tokenCacheTTL, clock)
 
 	srv := &Server{
 		ctx:                      ctx,
