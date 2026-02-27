@@ -1316,9 +1316,12 @@ func TestProxy_Tunneled(t *testing.T) {
 			reg := prometheus.NewRegistry()
 			metrics := aibridgeproxyd.NewMetrics(reg)
 
-			// Mock Coder API that validates tokens via GET /api/v2/users/me.
+			// Mock Coder server that handles both token validation and aibridged.
+			// For tunneled requests, aibridged should never be reached.
+			var aibridgedReached bool
 			coderServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/api/v2/users/me" && r.Method == http.MethodGet {
+					// Token validation for tunneled CONNECT requests.
 					token := r.Header.Get("Coder-Session-Token")
 					if token == tt.validToken {
 						w.Header().Set("Content-Type", "application/json")
@@ -1329,17 +1332,13 @@ func TestProxy_Tunneled(t *testing.T) {
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
-				w.WriteHeader(http.StatusNotFound)
-			}))
-			t.Cleanup(func() { coderServer.Close() })
-
-			var receivedPath string
-			aibridgedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				receivedPath = r.URL.Path
+				// Any other request would be aibridged traffic, which should not
+				// happen for tunneled requests.
+				aibridgedReached = true
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("hello from aibridged"))
 			}))
-			t.Cleanup(func() { aibridgedServer.Close() })
+			t.Cleanup(func() { coderServer.Close() })
 
 			tunneledServer, tunneledURL := newTargetServer(t, func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -1374,7 +1373,7 @@ func TestProxy_Tunneled(t *testing.T) {
 
 				require.Equal(t, http.StatusOK, resp.StatusCode)
 				require.Equal(t, "hello from tunneled", string(body))
-				require.Empty(t, receivedPath, "aibridged should not receive tunneled requests")
+				require.False(t, aibridgedReached, "aibridged should not receive tunneled requests")
 
 				gatheredMetrics, err := reg.Gather()
 				require.NoError(t, err)
