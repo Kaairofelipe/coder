@@ -1,0 +1,9 @@
+[build]
+builder = "railpack"
+buildCommand = "make build-fat"
+
+[deploy]
+startCommand = "./build/coder_linux_amd64"
+
+[build.railpack]
+providers = ["go", "node"]
